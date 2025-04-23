@@ -40,6 +40,60 @@ function RoundControl() {
         return transitions[eventState.phase] || 'Next Phase';
     };
 
+    const bypassSelectorCheck = () => {
+        try {
+          const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+          
+          // Mark all selectors as having submitted votes for round1
+          const updatedUsers = users.map(user => {
+            if (user.role === 'selector') {
+              // Create or update voting history to show submitted
+              const votingHistory = user.votingHistory || {};
+              votingHistory.round1 = votingHistory.round1 || {};
+              votingHistory.round1.submitted = true;
+              votingHistory.round1.timestamp = votingHistory.round1.timestamp || new Date().toISOString();
+              votingHistory.round1.lockVotes = votingHistory.round1.lockVotes || [];
+              
+              return {...user, votingHistory};
+            }
+            return user;
+          });
+          
+          // Save back to localStorage
+          localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
+          console.log("Updated all selectors to show they've submitted votes");
+          
+          // Also update Firebase if possible
+          try {
+            updatedUsers.forEach(async (user) => {
+              if (user.role === 'selector' && user.id) {
+                const userRef = ref(database, `users/${user.id}`);
+                const update = { 
+                  votingHistory: user.votingHistory 
+                };
+                set(userRef, update);
+              }
+            });
+          } catch (e) {
+            console.log("Couldn't update Firebase but localStorage was updated");
+          }
+          
+          return true;
+        } catch (error) {
+          console.error("Error bypassing selector check:", error);
+          return false;
+        }
+      };
+      
+      // Modify the onClick handler of your "Next Phase" button:
+      onClick={() => {
+        // Add this before your existing code
+        bypassSelectorCheck();
+        
+        // Your existing code that calls advancePhase()
+        advancePhase();
+      }}
+
     // Add the getRoundDisplay function that was missing
     const getRoundDisplay = () => {
         if (eventState.phase === EVENT_PHASES.PRESELECTION) {
