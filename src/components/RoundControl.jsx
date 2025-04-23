@@ -384,20 +384,16 @@ function RoundControl() {
                         }
                         
                         // If all checks pass, advance to the next phase
-                        advancePhase();
-
-                        setTimeout(() => {
-                            // Show success message
-                            alert("Phase advanced successfully! The page will refresh to show the new state.");
-                            
-                            // Force page refresh to ensure all components get fresh data
-                            window.location.reload();
-                          }, 1000); // 1 second delay
-                        
-                    }}
-                    className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+                                        advancePhase();
+                    
+                    // Add a delay before reload
+                    setTimeout(() => {
+                    window.location.reload();
+                    }, 2000); // 2 second delay
+                }}
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
                 >
-                    {getNextPhaseDisplay()}
+                {getNextPhaseDisplay()}
                 </button>
             </div>
         </div>

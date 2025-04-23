@@ -11,6 +11,8 @@ function LockVoteMonitoring() {
     const { user } = useAuth();
     const [selectedTab, setSelectedTab] = useState('status'); // 'status' or 'results'
     const [refreshKey, setRefreshKey] = useState(0); // Add a refresh key to force re-renders
+    const [isSaving, setIsSaving] = useState(false);
+    const [lastLoadTime, setLastLoadTime] = useState(0);
     
     // In a real system, we would fetch this from the backend
     // For now, we'll get actual users from our auth system
@@ -157,6 +159,16 @@ function LockVoteMonitoring() {
 
     // Separated loading logic to a function for reuse
     const loadData = async () => {
+        // Debounce the loading - don't reload more than once every 5 seconds
+        const now = Date.now();
+        if (now - lastLoadTime < 5000) {
+          console.log("Skipping load - too soon since last load");
+          return;
+        }
+        
+        // Update the last load time
+        setLastLoadTime(now);
+        
         try {
           setLoading(true);
           console.log("LockVoteMonitoring: Loading data from Firebase and localStorage");
@@ -276,18 +288,27 @@ function LockVoteMonitoring() {
           setLoading(false);
         } catch (error) {
             console.error("Error loading vote data:", error);
+          } finally {
             setLoading(false);
-        }
+          }
         };
       
 
     // Use useEffect to load data
     useEffect(() => {
+        // Initial load
         loadData();
-        // Set up an interval to refresh data every 10 seconds
-        const interval = setInterval(refreshData, 10000);
-        return () => clearInterval(interval);
-      }, [eventState.teams]);
+        
+        // Set up periodic refresh with longer interval
+        const refreshInterval = setInterval(() => {
+          const now = Date.now();
+          if (now - lastLoadTime >= 5000) {
+            loadData();
+          }
+        }, 10000); // Check every 10 seconds, but only reload if 5 seconds have passed
+        
+        return () => clearInterval(refreshInterval);
+      }, [eventState.teams, refreshKey]);
     
     // Add periodic automatic refresh for real-time updates
     useEffect(() => {
@@ -300,6 +321,9 @@ function LockVoteMonitoring() {
     
     // Handle adding teams to ranking group
     const finalizeQualifiedTeams = () => {
+        setIsSaving(true);
+  
+            try {
         console.log("Attempting to finalize qualified teams");
         console.log("Current selectors state:", selectors);
         console.log("Qualifying teams:", qualifyingTeams);
@@ -331,9 +355,15 @@ function LockVoteMonitoring() {
         
         // Update our state with the newly qualified teams (as pending)
         qualifyTeams(teamsToQualify);
-        
-        alert(`${teamsToQualify.length} teams have been qualified through lock voting! They will be officially qualified when the round is finalized.`);
-      };
+    
+            alert(`${teamsToQualify.length} teams have been qualified through lock voting! They will be officially qualified when the round is finalized.`);
+        } finally {
+            // Clear the flag after saving completes
+            setTimeout(() => {
+            setIsSaving(false);
+            }, 1000);
+        }
+        };
     
     // Sort by vote percentage (highest first)
     const sortedTeamVotes = [...teamVotes].sort((a, b) => b.votePercentage - a.votePercentage);
