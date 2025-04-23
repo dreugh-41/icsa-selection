@@ -42,42 +42,109 @@ function RoundControl() {
         return transitions[eventState.phase] || 'Next Phase';
     };
 
-    I understand the issue now. The bypass functions should not only preserve user data, but also effectively "bypass" the selector check by making it appear as if all selectors have submitted their votes for the current phase.
-Let's modify both bypass functions to ensure they properly mark all selectors as having voted for the relevant phase:
-For bypassSelectorCheck():
-javascriptconst bypassSelectorCheck = () => {
+    const bypassSelectorCheck = () => {
+        try {
+          const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+          console.log("Running bypassSelectorCheck with current round:", eventState.currentRound);
+          
+          // Get all selectors
+          const selectorUsers = users.filter(u => u.role === 'selector');
+          console.log(`Found ${selectorUsers.length} selectors to bypass check for`);
+          
+          // Mark all selectors as having submitted votes for the relevant phase
+          const updatedUsers = users.map(user => {
+            if (user.role === 'selector') {
+              // Preserve existing voting history
+              const votingHistory = {...(user.votingHistory || {})};
+              
+              // Determine which round key to use based on current phase
+              let roundKey;
+              if (eventState.phase === EVENT_PHASES.ROUND1_LOCK) {
+                roundKey = 'round1';
+              } else if (eventState.phase === EVENT_PHASES.ROUND_RANKING) {
+                roundKey = `round${eventState.currentRound}_ranking`;
+              } else {
+                roundKey = `round${eventState.currentRound}_leftover`;
+              }
+              
+              // Ensure the voting record exists and is marked as submitted
+              votingHistory[roundKey] = {
+                ...(votingHistory[roundKey] || {}),
+                submitted: true,
+                timestamp: votingHistory[roundKey]?.timestamp || new Date().toISOString(),
+                // Preserve existing votes if they exist
+                lockVotes: votingHistory[roundKey]?.lockVotes || [],
+                rankings: votingHistory[roundKey]?.rankings || [],
+                votes: votingHistory[roundKey]?.votes || []
+              };
+              
+              return {...user, votingHistory};
+            }
+            return user;
+          });
+          
+          // Save back to localStorage
+          localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
+          console.log(`Bypassed selector check: marked all selectors as having submitted votes for ${eventState.phase}`);
+          
+          // Update Firebase - only update the specific voting history path for each selector
+          updatedUsers.forEach(async (user) => {
+            if (user.role === 'selector' && user.id) {
+              try {
+                // Determine which round key to use based on current phase
+                let roundKey;
+                if (eventState.phase === EVENT_PHASES.ROUND1_LOCK) {
+                  roundKey = 'round1';
+                } else if (eventState.phase === EVENT_PHASES.ROUND_RANKING) {
+                  roundKey = `round${eventState.currentRound}_ranking`;
+                } else {
+                  roundKey = `round${eventState.currentRound}_leftover`;
+                }
+                
+                const votingHistoryRef = ref(database, `users/${user.id}/votingHistory/${roundKey}`);
+                await set(votingHistoryRef, {
+                  ...(user.votingHistory?.[roundKey] || {}),
+                  submitted: true,
+                  timestamp: user.votingHistory?.[roundKey]?.timestamp || new Date().toISOString(),
+                  // Include empty arrays as defaults for votes
+                  lockVotes: user.votingHistory?.[roundKey]?.lockVotes || [],
+                  rankings: user.votingHistory?.[roundKey]?.rankings || [],
+                  votes: user.votingHistory?.[roundKey]?.votes || []
+                });
+                console.log(`Updated Firebase voting history for user ${user.id}, round ${roundKey}`);
+              } catch (e) {
+                console.log(`Couldn't update Firebase for user ${user.id}:`, e);
+              }
+            }
+          });
+          
+          return true;
+        } catch (error) {
+          console.error("Error bypassing selector check:", error);
+          return false;
+        }
+      };
+      
+      const bypassLeftoverCheck = () => {
   try {
     const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
-    console.log("Running bypassSelectorCheck with current round:", eventState.currentRound);
+    console.log("Running bypassLeftoverCheck with current round:", eventState.currentRound);
     
-    // Get all selectors
-    const selectorUsers = users.filter(u => u.role === 'selector');
-    console.log(`Found ${selectorUsers.length} selectors to bypass check for`);
+    // Use the current round for the key
+    const roundKey = `round${eventState.currentRound}_leftover`;
+    console.log("Using round key:", roundKey);
     
-    // Mark all selectors as having submitted votes for the relevant phase
+    // Mark all selectors as having submitted leftover votes for the current round
     const updatedUsers = users.map(user => {
       if (user.role === 'selector') {
         // Preserve existing voting history
         const votingHistory = {...(user.votingHistory || {})};
         
-        // Determine which round key to use based on current phase
-        let roundKey;
-        if (eventState.phase === EVENT_PHASES.ROUND1_LOCK) {
-          roundKey = 'round1';
-        } else if (eventState.phase === EVENT_PHASES.ROUND_RANKING) {
-          roundKey = `round${eventState.currentRound}_ranking`;
-        } else {
-          roundKey = `round${eventState.currentRound}_leftover`;
-        }
-        
-        // Ensure the voting record exists and is marked as submitted
+        // ALWAYS mark this round's leftover votes as submitted
         votingHistory[roundKey] = {
           ...(votingHistory[roundKey] || {}),
-          submitted: true,
+          submitted: true, // Force this to true to bypass the check
           timestamp: votingHistory[roundKey]?.timestamp || new Date().toISOString(),
-          // Preserve existing votes if they exist
-          lockVotes: votingHistory[roundKey]?.lockVotes || [],
-          rankings: votingHistory[roundKey]?.rankings || [],
           votes: votingHistory[roundKey]?.votes || []
         };
         
@@ -88,33 +155,19 @@ javascriptconst bypassSelectorCheck = () => {
     
     // Save back to localStorage
     localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
-    console.log(`Bypassed selector check: marked all selectors as having submitted votes for ${eventState.phase}`);
+    console.log(`Bypassed selector check: marked all selectors as having submitted leftover votes for round ${eventState.currentRound}`);
     
-    // Update Firebase - only update the specific voting history path for each selector
+    // Update Firebase - ensure EVERY selector is marked as having submitted
     updatedUsers.forEach(async (user) => {
       if (user.role === 'selector' && user.id) {
         try {
-          // Determine which round key to use based on current phase
-          let roundKey;
-          if (eventState.phase === EVENT_PHASES.ROUND1_LOCK) {
-            roundKey = 'round1';
-          } else if (eventState.phase === EVENT_PHASES.ROUND_RANKING) {
-            roundKey = `round${eventState.currentRound}_ranking`;
-          } else {
-            roundKey = `round${eventState.currentRound}_leftover`;
-          }
-          
           const votingHistoryRef = ref(database, `users/${user.id}/votingHistory/${roundKey}`);
           await set(votingHistoryRef, {
-            ...(user.votingHistory?.[roundKey] || {}),
-            submitted: true,
-            timestamp: user.votingHistory?.[roundKey]?.timestamp || new Date().toISOString(),
-            // Include empty arrays as defaults for votes
-            lockVotes: user.votingHistory?.[roundKey]?.lockVotes || [],
-            rankings: user.votingHistory?.[roundKey]?.rankings || [],
+            submitted: true, // Force this to true
+            timestamp: new Date().toISOString(),
             votes: user.votingHistory?.[roundKey]?.votes || []
           });
-          console.log(`Updated Firebase voting history for user ${user.id}, round ${roundKey}`);
+          console.log(`Updated Firebase leftover voting for user ${user.id}, round ${roundKey}`);
         } catch (e) {
           console.log(`Couldn't update Firebase for user ${user.id}:`, e);
         }
@@ -123,66 +176,10 @@ javascriptconst bypassSelectorCheck = () => {
     
     return true;
   } catch (error) {
-    console.error("Error bypassing selector check:", error);
+    console.error("Error bypassing leftover check:", error);
     return false;
   }
 };
-      
-const bypassLeftoverCheck = () => {
-    try {
-      const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
-      console.log("Running bypassLeftoverCheck with current round:", eventState.currentRound);
-      
-      // Use the current round for the key
-      const roundKey = `round${eventState.currentRound}_leftover`;
-      console.log("Using round key:", roundKey);
-      
-      // Mark all selectors as having submitted leftover votes for the current round
-      const updatedUsers = users.map(user => {
-        if (user.role === 'selector') {
-          // Preserve existing voting history
-          const votingHistory = {...(user.votingHistory || {})};
-          
-          // ALWAYS mark this round's leftover votes as submitted
-          votingHistory[roundKey] = {
-            ...(votingHistory[roundKey] || {}),
-            submitted: true, // Force this to true to bypass the check
-            timestamp: votingHistory[roundKey]?.timestamp || new Date().toISOString(),
-            votes: votingHistory[roundKey]?.votes || []
-          };
-          
-          return {...user, votingHistory};
-        }
-        return user;
-      });
-      
-      // Save back to localStorage
-      localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
-      console.log(`Bypassed selector check: marked all selectors as having submitted leftover votes for round ${eventState.currentRound}`);
-      
-      // Update Firebase - ensure EVERY selector is marked as having submitted
-      updatedUsers.forEach(async (user) => {
-        if (user.role === 'selector' && user.id) {
-          try {
-            const votingHistoryRef = ref(database, `users/${user.id}/votingHistory/${roundKey}`);
-            await set(votingHistoryRef, {
-              submitted: true, // Force this to true
-              timestamp: new Date().toISOString(),
-              votes: user.votingHistory?.[roundKey]?.votes || []
-            });
-            console.log(`Updated Firebase leftover voting for user ${user.id}, round ${roundKey}`);
-          } catch (e) {
-            console.log(`Couldn't update Firebase for user ${user.id}:`, e);
-          }
-        }
-      });
-      
-      return true;
-    } catch (error) {
-      console.error("Error bypassing leftover check:", error);
-      return false;
-    }
-  };
       
       const bypassRankingCheck = () => {
         try {
