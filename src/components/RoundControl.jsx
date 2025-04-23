@@ -45,16 +45,25 @@ function RoundControl() {
     const bypassSelectorCheck = () => {
         try {
           const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+          console.log("Running bypassSelectorCheck with current round:", eventState.currentRound);
           
-          // Mark all selectors as having submitted votes for round1
+          // Mark all selectors as having submitted votes for round1 or the current round
           const updatedUsers = users.map(user => {
             if (user.role === 'selector') {
-              // Create or update voting history to show submitted
-              const votingHistory = user.votingHistory || {};
-              votingHistory.round1 = votingHistory.round1 || {};
-              votingHistory.round1.submitted = true;
-              votingHistory.round1.timestamp = votingHistory.round1.timestamp || new Date().toISOString();
-              votingHistory.round1.lockVotes = votingHistory.round1.lockVotes || [];
+              // Preserve existing voting history
+              const votingHistory = {...(user.votingHistory || {})};
+              
+              // Update just the current round's data
+              const roundKey = eventState.phase === EVENT_PHASES.ROUND1_LOCK ? 
+                'round1' : `round${eventState.currentRound}_ranking`;
+                
+              votingHistory[roundKey] = {
+                ...(votingHistory[roundKey] || {}),
+                submitted: true,
+                timestamp: votingHistory[roundKey]?.timestamp || new Date().toISOString(),
+                lockVotes: votingHistory[roundKey]?.lockVotes || [],
+                rankings: votingHistory[roundKey]?.rankings || []
+              };
               
               return {...user, votingHistory};
             }
@@ -65,17 +74,21 @@ function RoundControl() {
           localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
           console.log("Updated all selectors to show they've submitted votes");
           
-          // Also update Firebase if possible
-          try {
-            updatedUsers.forEach(async (user) => {
-              if (user.role === 'selector' && user.id) {
-                const userRef = ref(database, `users/${user.id}`);
-                update(userRef, { votingHistory: user.votingHistory });
+          // Update Firebase - only update the specific voting history path
+          updatedUsers.forEach(async (user) => {
+            if (user.role === 'selector' && user.id) {
+              try {
+                const roundKey = eventState.phase === EVENT_PHASES.ROUND1_LOCK ? 
+                  'round1' : `round${eventState.currentRound}_ranking`;
+                  
+                const votingHistoryRef = ref(database, `users/${user.id}/votingHistory/${roundKey}`);
+                await set(votingHistoryRef, user.votingHistory[roundKey]);
+                console.log(`Updated Firebase voting history for user ${user.id}, round ${roundKey}`);
+              } catch (e) {
+                console.log(`Couldn't update Firebase for user ${user.id}:`, e);
               }
-            });
-          } catch (e) {
-            console.log("Couldn't update Firebase but localStorage was updated");
-          }
+            }
+          });
           
           return true;
         } catch (error) {
@@ -87,59 +100,51 @@ function RoundControl() {
       const bypassLeftoverCheck = () => {
         try {
           const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
-          const roundKey = `round${eventState.currentRound}_leftover`;
+          console.log("Running bypassLeftoverCheck with current round:", eventState.currentRound);
           
-          // For alternate rounds, ensure we're not using old voting history
-          if (eventState.phase === EVENT_PHASES.ROUND_FINALIZED && 
-              (eventState.qualifiedTeams.length >= 36 || eventState.remainingBerths === 0)) {
-            console.log("Transitioning to alternate round - resetting voting history");
-            
-            // Force a round increment for checking
-            const nextRound = eventState.currentRound + 1;
-            const alternateRoundKey = `round${nextRound}_leftover`;
-            
-            // Reset all selectors' voting status for the next round
-            const updatedUsers = users.map(user => {
-              if (user.role === 'selector') {
-                // Create voting history object if it doesn't exist
-                const votingHistory = {...(user.votingHistory || {})};
-                
-                // Initialize just this specific round's voting data
-                votingHistory[alternateRoundKey] = {
-                  submitted: false,
-                  votes: [],
-                  timestamp: null
-                };
-                
-                return {...user, votingHistory};
+          // Use the current round for the key
+          const roundKey = `round${eventState.currentRound}_leftover`;
+          console.log("Using round key:", roundKey);
+          
+          // Mark all selectors as having submitted leftover votes for the current round
+          const updatedUsers = users.map(user => {
+            if (user.role === 'selector') {
+              // Preserve existing voting history
+              const votingHistory = {...(user.votingHistory || {})};
+              
+              // Update just the specific round's data
+              votingHistory[roundKey] = {
+                ...(votingHistory[roundKey] || {}),
+                submitted: true,
+                timestamp: votingHistory[roundKey]?.timestamp || new Date().toISOString(),
+                votes: votingHistory[roundKey]?.votes || []
+              };
+              
+              return {...user, votingHistory};
+            }
+            return user;
+          });
+          
+          // Save back to localStorage
+          localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
+          console.log(`Updated all selectors to show they've submitted leftover votes for round ${eventState.currentRound}`);
+          
+          // Update Firebase - only update the specific leftover voting path
+          updatedUsers.forEach(async (user) => {
+            if (user.role === 'selector' && user.id) {
+              try {
+                const votingHistoryRef = ref(database, `users/${user.id}/votingHistory/${roundKey}`);
+                await set(votingHistoryRef, user.votingHistory[roundKey]);
+                console.log(`Updated Firebase leftover voting for user ${user.id}, round ${roundKey}`);
+              } catch (e) {
+                console.log(`Couldn't update Firebase for user ${user.id}:`, e);
               }
-              return user;
-            });
-            
-            // Save back to localStorage
-            localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
-            
-            // Also update Firebase - just update the specific round's data
-            updatedUsers.forEach(async (user) => {
-              if (user.role === 'selector' && user.id) {
-                try {
-                  // Update just this round's voting data, not the entire voting history
-                  const userRoundVotingRef = ref(database, `users/${user.id}/votingHistory/${alternateRoundKey}`);
-                  await set(userRoundVotingRef, {
-                    submitted: false,
-                    votes: [],
-                    timestamp: null
-                  });
-                } catch (e) {
-                  console.log(`Couldn't update Firebase for user ${user.id}`);
-                }
-              }
-            });
-          }
+            }
+          });
           
           return true;
         } catch (error) {
-          console.error("Error in bypassLeftoverCheck:", error);
+          console.error("Error bypassing leftover check:", error);
           return false;
         }
       };
