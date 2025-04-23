@@ -1,25 +1,65 @@
 // src/pages/Parliamentarian/Round1Management.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useEvent } from '../../contexts/EventContext';
 
 function Round1Management() {
+    console.log("Rendering Round1Management component");
     const { eventState, qualifyTeams } = useEvent();
+    console.log("Retrieved eventState:", eventState);
+    
+    // Make sure we have an empty Set if needed
     const [selectedTeams, setSelectedTeams] = useState(new Set());
     const [searchTerm, setSearchTerm] = useState('');
+    
+    // Safely initialize isSubmitted
     const [isSubmitted, setIsSubmitted] = useState(() => {
-        // Check if any teams are already qualified as AQ (with null checks)
-        const pendingAQ = Array.isArray(eventState?.pendingQualifiedTeams) && 
-                         eventState.pendingQualifiedTeams.some(team => team?.status?.qualificationMethod === 'AQ');
-        
-        const qualifiedAQ = Array.isArray(eventState?.qualifiedTeams) && 
-                           eventState.qualifiedTeams.some(team => team?.status?.qualificationMethod === 'AQ');
-        
-        return pendingAQ || qualifiedAQ;
+        try {
+            console.log("Initializing isSubmitted state");
+            
+            // Check if eventState exists
+            if (!eventState) {
+                console.log("eventState is undefined, defaulting to false");
+                return false;
+            }
+            
+            // Check if arrays exist before accessing them
+            const pendingTeams = Array.isArray(eventState.pendingQualifiedTeams) 
+                ? eventState.pendingQualifiedTeams : [];
+            
+            const qualifiedTeams = Array.isArray(eventState.qualifiedTeams)
+                ? eventState.qualifiedTeams : [];
+            
+            // Check for AQ teams
+            const hasPendingAQs = pendingTeams.some(team => 
+                team && team.status && team.status.qualificationMethod === 'AQ');
+            
+            const hasQualifiedAQs = qualifiedTeams.some(team => 
+                team && team.status && team.status.qualificationMethod === 'AQ');
+            
+            return hasPendingAQs || hasQualifiedAQs;
+        } catch (error) {
+            console.error("Error in isSubmitted initialization:", error);
+            return false;
+        }
     });
 
-    // Sort all teams alphabetically in a single list
-    const sortedTeams = (Array.isArray(eventState.teams) ? eventState.teams : [])
-    .sort((a, b) => a.name.localeCompare(b.name));
+    // Safely initialize teams
+    const sortedTeams = React.useMemo(() => {
+        try {
+            // Safety check for eventState and teams
+            if (!eventState || !Array.isArray(eventState.teams)) {
+                console.log("Teams array is undefined or not an array, returning empty array");
+                return [];
+            }
+            
+            // Make a safe copy and sort
+            return [...eventState.teams].sort((a, b) => 
+                (a?.name || "").localeCompare(b?.name || ""));
+        } catch (error) {
+            console.error("Error sorting teams:", error);
+            return [];
+        }
+    }, [eventState]);
 
     // Handle selecting/deselecting a team
     const toggleTeamSelection = (teamId) => {
