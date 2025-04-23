@@ -85,14 +85,7 @@ function RoundControl() {
         }
       };
       
-      // Modify the onClick handler of your "Next Phase" button:
-      onClick={() => {
-        // Add this before your existing code
-        bypassSelectorCheck();
-        
-        // Your existing code that calls advancePhase()
-        advancePhase();
-      }}
+    
 
     // Add the getRoundDisplay function that was missing
     const getRoundDisplay = () => {
@@ -159,6 +152,7 @@ function RoundControl() {
                 </div>
                 <button
                     onClick={() => {
+                        bypassSelectorCheck();
                         // Check if teams have been uploaded before starting the process
                         if (eventState.phase === EVENT_PHASES.PRESELECTION && 
                             (!eventState.teams || eventState.teams.length === 0)) {
