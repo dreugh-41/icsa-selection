@@ -12,6 +12,8 @@ import {
   onUsersChange,
   saveUserVotingHistory
 } from '../services/databaseService';
+import { ref, get, set } from 'firebase/database';
+import { database } from '../../firebase';
 
 // Create the context
 const AuthContext = createContext(null);
@@ -85,15 +87,15 @@ export function AuthProvider({ children }) {
       );
       setAllUsers(updatedUsers);
       
-      // Save to Firebase database
+      // Save to Firebase database - FULL USER OBJECT
       console.log("Saving updated users to Firebase");
-      await saveUsers(updatedUsers);
       
-      // Explicitly save voting history to ensure it's updated
-      if (updatedUser.votingHistory) {
-        console.log("Saving voting history for user:", updatedUser.id);
-        await saveUserVotingHistory(updatedUser.id, updatedUser.votingHistory);
-      }
+      // Save the complete user object to Firebase, not just voting history
+      const userRef = ref(database, `users/${updatedUser.id}`);
+      await set(userRef, updatedUser); // Save the complete user object
+      
+      // Also save to localStorage for backup
+      localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
       
       console.log("User update completed successfully");
       return true;
