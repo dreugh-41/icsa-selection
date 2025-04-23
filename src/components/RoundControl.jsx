@@ -1,7 +1,7 @@
 // src/components/RoundControl.jsx
 import React from 'react';
 import { useEvent, EVENT_PHASES } from '../contexts/EventContext';
-import { ref, get } from 'firebase/database';
+import { ref, get, set, update } from 'firebase/database';
 import { database } from '../firebase';
 
 function RoundControl() {
