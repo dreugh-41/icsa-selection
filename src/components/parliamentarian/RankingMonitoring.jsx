@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useEvent, EVENT_PHASES } from '../../contexts/EventContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { ref, get } from 'firebase/database';
+import { database } from '../../firebase';
 
 function RankingMonitoring() {
     const { eventState, qualifyTeams, logSelectorRankings } = useEvent();
@@ -20,6 +22,168 @@ function RankingMonitoring() {
     const teamsToQualify = eventState.teamsToQualifyThisRound !== null
         ? eventState.teamsToQualifyThisRound
         : Math.floor(eventState.remainingBerths / 3); // Default to 1/3 of remaining berths
+
+        const processRankings = (selectorUsers, roundKey) => {
+            try {
+              // Gather and process rankings
+              const allRankings = [];
+              selectorUsers.forEach(selector => {
+                if (selector.votingHistory?.[roundKey]?.submitted) {
+                  const selectorRankings = selector.votingHistory[roundKey].rankings || [];
+                  
+                  // Create a properly formatted ranking entry
+                  allRankings.push({
+                    selectorId: selector.id,
+                    selectorName: selector.name,
+                    rankings: selectorRankings.map((teamId, index) => {
+                      const team = eventState.teams.find(t => t.id === teamId);
+                      return {
+                        teamId,
+                        teamName: team ? team.name : 'Unknown Team',
+                        csrRank: team ? team.csrRank : 0,
+                        rank: index + 1
+                      };
+                    })
+                  });
+                }
+              });
+              
+              setSelectorRankings(allRankings);
+              
+              // Calculate average rankings
+              if (allRankings.length > 0) {
+                const teamRankSums = {};
+                const teamRankCounts = {};
+                const teamDetails = {};
+                
+                // Collect all rankings
+                allRankings.forEach(selector => {
+                  selector.rankings.forEach(ranking => {
+                    if (!teamRankSums[ranking.teamId]) {
+                      teamRankSums[ranking.teamId] = 0;
+                      teamRankCounts[ranking.teamId] = 0;
+                      teamDetails[ranking.teamId] = {
+                        teamName: ranking.teamName,
+                        csrRank: ranking.csrRank,
+                        rankings: []
+                      };
+                    }
+                    
+                    teamRankSums[ranking.teamId] += ranking.rank;
+                    teamRankCounts[ranking.teamId]++;
+                    teamDetails[ranking.teamId].rankings.push(ranking.rank);
+                  });
+                });
+                
+                // Calculate averages
+                const avgRankings = Object.keys(teamRankSums).map(teamId => ({
+                  teamId,
+                  teamName: teamDetails[teamId].teamName,
+                  csrRank: teamDetails[teamId].csrRank,
+                  averageRank: (teamRankSums[teamId] / teamRankCounts[teamId]).toFixed(2),
+                  rankings: teamDetails[teamId].rankings
+                }));
+                
+                // Sort by average rank
+                const sortedRankings = avgRankings.sort((a, b) => 
+                  parseFloat(a.averageRank) - parseFloat(b.averageRank)
+                );
+                
+                setAverageRankings(sortedRankings);
+                
+                // Determine qualifying teams
+                const qualifyingTeamsList = sortedRankings.slice(0, teamsToQualify).map(team => {
+                  const originalTeam = eventState.teams.find(t => t.id === team.teamId);
+                  if (originalTeam) {
+                    return {
+                      ...originalTeam,
+                      status: {
+                        ...originalTeam.status,
+                        isQualified: true,
+                        qualificationMethod: 'RANKING',
+                        qualificationRound: eventState.currentRound
+                      }
+                    };
+                  }
+                  return null;
+                }).filter(Boolean);
+                
+                // Update qualifying teams list
+                setQualifyingTeams(qualifyingTeamsList);
+              }
+            } catch (error) {
+              console.error("Error processing rankings:", error);
+            }
+          };
+          
+          // Add this function to load selector data from Firebase
+          const loadSelectorData = async () => {
+            try {
+              console.log("RankingMonitoring: Loading selector data from Firebase and localStorage");
+              
+              // Try to get users from Firebase first
+              let allUsers = [];
+              try {
+                const usersSnapshot = await get(ref(database, 'users'));
+                if (usersSnapshot.exists()) {
+                  const usersData = usersSnapshot.val();
+                  console.log("Firebase users data:", usersData);
+                  
+                  // Convert object to array
+                  allUsers = Object.values(usersData);
+                } else {
+                  console.log("No users found in Firebase");
+                }
+              } catch (firebaseError) {
+                console.error("Error reading from Firebase:", firebaseError);
+              }
+              
+              // If we didn't get users from Firebase, use localStorage as backup
+              if (allUsers.length === 0) {
+                console.log("Using localStorage for user data");
+                allUsers = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+              }
+              
+              // Filter for selectors
+              const selectorUsers = allUsers.filter(u => u && u.role === 'selector' && u.isActive !== false);
+              console.log("Found selectors:", selectorUsers.length);
+              
+              const roundKey = `round${eventState.currentRound}_ranking`;
+              
+              // Create selector status objects
+              const selectorStatus = selectorUsers.map(selector => {
+                // Check if this selector has submitted rankings for this round
+                const hasSubmitted = selector?.votingHistory?.[roundKey]?.submitted || false;
+                const timestamp = selector?.votingHistory?.[roundKey]?.timestamp || null;
+                
+                return {
+                  id: selector.id,
+                  name: selector.name,
+                  hasSubmitted: hasSubmitted,
+                  timestamp: timestamp
+                };
+              });
+              
+              setSelectors(selectorStatus);
+              
+              // Process ranking data
+              processRankings(selectorUsers, roundKey);
+            } catch (error) {
+              console.error("Error loading selector data:", error);
+            }
+          };
+          
+          // Add a useEffect to load data initially and refresh periodically
+          useEffect(() => {
+            loadSelectorData();
+            
+            // Set up auto-refresh
+            const refreshInterval = setInterval(() => {
+              loadSelectorData();
+            }, 10000); // Every 10 seconds
+            
+            return () => clearInterval(refreshInterval);
+          }, [eventState.rankingGroup, eventState.currentRound]);
 
     // Use useEffect to load data
     useEffect(() => {

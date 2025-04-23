@@ -128,7 +128,56 @@ function RoundControl() {
           console.error("Error bypassing selector check for leftover votes:", error);
           return false;
         }
-      };  
+      };
+      
+      const bypassRankingCheck = () => {
+        try {
+          const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+          const roundKey = `round${eventState.currentRound}_ranking`;
+          
+          // Mark all selectors as having submitted ranking votes
+          const updatedUsers = users.map(user => {
+            if (user.role === 'selector') {
+              // Create or update voting history for ranking
+              const votingHistory = user.votingHistory || {};
+              votingHistory[roundKey] = votingHistory[roundKey] || {};
+              votingHistory[roundKey].submitted = true;
+              votingHistory[roundKey].timestamp = votingHistory[roundKey].timestamp || new Date().toISOString();
+              
+              // Create empty rankings array if it doesn't exist
+              if (!votingHistory[roundKey].rankings) {
+                // If the ranking group exists, create a default ranking of all teams in it
+                const rankingGroup = eventState.rankingGroup || [];
+                votingHistory[roundKey].rankings = rankingGroup.map(team => team.id);
+              }
+              
+              return {...user, votingHistory};
+            }
+            return user;
+          });
+          
+          // Save back to localStorage
+          localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
+          console.log(`Updated all selectors to show they've submitted rankings for round ${eventState.currentRound}`);
+          
+          // Also try to update Firebase
+          try {
+            updatedUsers.forEach(async (user) => {
+              if (user.role === 'selector' && user.id) {
+                const userRef = ref(database, `users/${user.id}`);
+                await update(userRef, { votingHistory: user.votingHistory });
+              }
+            });
+          } catch (e) {
+            console.log("Couldn't update Firebase but localStorage was updated");
+          }
+          
+          return true;
+        } catch (error) {
+          console.error("Error bypassing selector check for ranking votes:", error);
+          return false;
+        }
+      };
     
 
     // Add the getRoundDisplay function that was missing
@@ -314,6 +363,7 @@ function RoundControl() {
                         // Check if there are pending ranking qualifications that need to be finalized
                         if (eventState.phase === EVENT_PHASES.ROUND_RANKING && 
                             !eventState.pendingQualifiedTeams?.some(team => team.status?.qualificationMethod === 'RANKING')) {
+                                bypassRankingCheck();
                             alert('Please finalize qualifying teams from rankings before advancing to the next phase.');
                             return;
                         }
