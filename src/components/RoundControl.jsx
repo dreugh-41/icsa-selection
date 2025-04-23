@@ -101,8 +101,10 @@ function RoundControl() {
             // Reset all selectors' voting status for the next round
             const updatedUsers = users.map(user => {
               if (user.role === 'selector') {
-                const votingHistory = user.votingHistory || {};
-                // Clear any existing votes for the upcoming round
+                // Create voting history object if it doesn't exist
+                const votingHistory = {...(user.votingHistory || {})};
+                
+                // Initialize just this specific round's voting data
                 votingHistory[alternateRoundKey] = {
                   submitted: false,
                   votes: [],
@@ -116,31 +118,31 @@ function RoundControl() {
             
             // Save back to localStorage
             localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
-            console.log(`Reset selector voting history for alternate round ${nextRound}`);
             
-            // Also update Firebase
-            try {
-              updatedUsers.forEach(async (user) => {
-                if (user.role === 'selector' && user.id) {
-                  // Clear only the specific round's voting history
-                  const userVotingHistoryRef = ref(database, `users/${user.id}/votingHistory/${alternateRoundKey}`);
-                  await set(userVotingHistoryRef, {
+            // Also update Firebase - just update the specific round's data
+            updatedUsers.forEach(async (user) => {
+              if (user.role === 'selector' && user.id) {
+                try {
+                  // Update just this round's voting data, not the entire voting history
+                  const userRoundVotingRef = ref(database, `users/${user.id}/votingHistory/${alternateRoundKey}`);
+                  await set(userRoundVotingRef, {
                     submitted: false,
                     votes: [],
                     timestamp: null
                   });
+                } catch (e) {
+                  console.log(`Couldn't update Firebase for user ${user.id}`);
                 }
-              });
-            } catch (e) {
-              console.log("Couldn't update Firebase but localStorage was updated");
-            }
+              }
+            });
           }
           
           return true;
         } catch (error) {
-            console.error("Error in bypassLeftoverCheck:", error);
-          }
-        };
+          console.error("Error in bypassLeftoverCheck:", error);
+          return false;
+        }
+      };
       
       const bypassRankingCheck = () => {
         try {
@@ -332,7 +334,7 @@ function RoundControl() {
                         
                         // Check if there are pending lock votes that need to be finalized
                             if (eventState.phase === EVENT_PHASES.ROUND1_LOCK) {
-                                bypassSelectorCheck()
+                                //bypassSelectorCheck()
                                 // First check if all selectors have submitted their votes
                                 const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
                                 const selectorUsers = users.filter(u => u.role === 'selector');
@@ -347,6 +349,12 @@ function RoundControl() {
                                 
                                 // If there are teams that got enough lock votes, they should be added to pending qualified
                                 const votingSelectors = selectorUsers.filter(s => s.votingHistory?.round1?.submitted).length;
+                                
+                                // Log the voting status for debugging
+                                console.log("Selector lock vote status:");
+                                selectorUsers.forEach(s => {
+                                    console.log(`- ${s.name}: ${s.votingHistory?.round1?.submitted ? "Submitted" : "Not submitted"}`);
+                                });
                                 
                                 // Get team votes
                                 const teamVotes = {};
@@ -380,7 +388,7 @@ function RoundControl() {
                         // Check if the leftover voting phase has been completed properly
                         if (eventState.phase === EVENT_PHASES.ROUND_LEFTOVER) {
                             bypassLeftoverCheck();
-                            bypassSelectorCheck()
+                            //bypassSelectorCheck()
                             // Get all selectors and their voting status
                             const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
                             const selectorUsers = users.filter(u => u.role === 'selector');
