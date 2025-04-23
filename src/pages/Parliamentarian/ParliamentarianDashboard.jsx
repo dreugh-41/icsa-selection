@@ -55,12 +55,12 @@ function ParliamentarianDashboard() {
     const renderPhaseComponent = () => {
       try {
           // First check if selection type is set
-          if (!safeGet(eventState, 'selectionType')) {
+          if (!eventState?.selectionType) {
               return <ProcessSelection />;
           }
           
           // Then handle phases as before
-          const currentPhase = safeGet(eventState, 'phase');
+          const currentPhase = eventState?.phase;
           console.log("ParliamentarianDashboard - Current phase:", currentPhase);
           
           switch (currentPhase) {
@@ -113,33 +113,35 @@ function ParliamentarianDashboard() {
                           )}
                       </div>
                   );
-              default:
-                  return (
-                      <div className="bg-white p-6 rounded-lg shadow-sm">
-                          <h2 className="text-xl font-semibold mb-4">Welcome to the Selection Process</h2>
-                          <p>Use the controls above to manage the selection process phases.</p>
-                      </div>
-                  );
-          }
-      } catch (error) {
-          console.error("Error rendering phase component:", error);
-          return (
-              <div className="bg-white p-6 rounded-lg shadow-sm">
-                  <h2 className="text-xl font-semibold mb-4 text-red-600">Something went wrong</h2>
-                  <p className="text-gray-700">An error occurred while rendering the current phase.</p>
-                  <div className="mt-4 p-4 bg-red-50 rounded-lg">
-                      <p className="text-sm text-red-700">
-                          Please refresh the page or contact the administrator.
-                      </p>
-                      <pre className="mt-2 p-2 bg-gray-100 text-xs overflow-auto rounded">
-                          Phase: {safeGet(eventState, 'phase', 'unknown')}
-                          Round: {safeGet(eventState, 'currentRound', 0)}
-                      </pre>
-                  </div>
-              </div>
-          );
-      }
-  };
+                  default:
+                    return (
+                        <div className="bg-white p-6 rounded-lg shadow-sm">
+                            <h2 className="text-xl font-semibold mb-4">Welcome to the Selection Process</h2>
+                            <p>Use the controls above to manage the selection process phases.</p>
+                        </div>
+                    );
+            }
+        } catch (error) {
+            console.error("Error rendering phase component:", error);
+            return (
+                <div className="bg-white p-6 rounded-lg shadow-sm">
+                    <h2 className="text-xl font-semibold mb-4 text-red-600">Something went wrong</h2>
+                    <p className="text-gray-700">An error occurred while rendering the current phase.</p>
+                    <div className="mt-4 p-4 bg-red-50 rounded-lg">
+                        <p className="text-sm text-red-700">
+                            Error: {error.message}
+                        </p>
+                        <button 
+                            onClick={() => window.location.reload()}
+                            className="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                        >
+                            Refresh Page
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+    };
 
     // Function to render the qualified teams section with more detail
     const renderQualifiedTeams = () => {

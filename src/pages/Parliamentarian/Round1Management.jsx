@@ -7,14 +7,19 @@ function Round1Management() {
     const [selectedTeams, setSelectedTeams] = useState(new Set());
     const [searchTerm, setSearchTerm] = useState('');
     const [isSubmitted, setIsSubmitted] = useState(() => {
-        // Check if any teams are already qualified as AQ
-        return eventState.pendingQualifiedTeams.some(team => team.status?.qualificationMethod === 'AQ') || 
-               eventState.qualifiedTeams.some(team => team.status?.qualificationMethod === 'AQ');
+        // Check if any teams are already qualified as AQ (with null checks)
+        const pendingAQ = Array.isArray(eventState?.pendingQualifiedTeams) && 
+                         eventState.pendingQualifiedTeams.some(team => team?.status?.qualificationMethod === 'AQ');
+        
+        const qualifiedAQ = Array.isArray(eventState?.qualifiedTeams) && 
+                           eventState.qualifiedTeams.some(team => team?.status?.qualificationMethod === 'AQ');
+        
+        return pendingAQ || qualifiedAQ;
     });
 
     // Sort all teams alphabetically in a single list
-    const sortedTeams = eventState.teams
-        .sort((a, b) => a.name.localeCompare(b.name));
+    const sortedTeams = (Array.isArray(eventState.teams) ? eventState.teams : [])
+    .sort((a, b) => a.name.localeCompare(b.name));
 
     // Handle selecting/deselecting a team
     const toggleTeamSelection = (teamId) => {
@@ -32,23 +37,24 @@ function Round1Management() {
     // Handle finalizing AQ selections
     const finalizeAQSelections = () => {
         if (selectedTeams.size !== 12) {
-        alert('You must select exactly 12 Automatic Qualifiers before finalizing.');
-        return;
+            alert('You must select exactly 12 Automatic Qualifiers before finalizing.');
+            return;
         }
         
-        const qualifiedTeams = eventState.teams
-        .filter(team => selectedTeams.has(team.id))
-        .map(team => ({
-            ...team,
-            status: {
-            ...team.status,
-            isAQ: true,
-            isQualified: true,
-            qualificationMethod: 'AQ',
-            qualificationRound: 1
-            }
-        }));
-    
+        // Add null check for eventState.teams
+        const qualifiedTeams = (Array.isArray(eventState.teams) ? eventState.teams : [])
+            .filter(team => selectedTeams.has(team.id))
+            .map(team => ({
+                ...team,
+                status: {
+                    ...(team.status || {}),
+                    isAQ: true,
+                    isQualified: true,
+                    qualificationMethod: 'AQ',
+                    qualificationRound: 1
+                }
+            }));
+        
         // This will now set them as pending qualified teams
         qualifyTeams(qualifiedTeams);
         
