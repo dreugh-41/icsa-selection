@@ -10,36 +10,43 @@ function ResetProcess() {
   
   const handleReset = async () => {
     try {
-      // Clear Firebase first
+      // Clear Firebase event state first
       const eventStateRef = ref(database, 'eventState');
       await set(eventStateRef, null);
       console.log("Reset Firebase event state");
       
-      // Only then clear localStorage
+      // Clear localStorage event state
       localStorage.removeItem('sailing_nationals_event_state');
       
-      // Clear selector voting history in Firebase
+      // For users, only clear their voting history, not their entire data
       const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
-      await Promise.all(users.map(async (user) => {
-        if (user.role === 'selector' && user.id) {
-          const userRef = ref(database, `users/${user.id}/votingHistory`);
-          await set(userRef, null);
-        }
-      }));
       
-      // Update localStorage users
+      // Update each user to clear only their voting history
       const updatedUsers = users.map(user => {
-        if (user.role === 'selector') {
+        if (user.role === 'selector' && user.id) {
           return {
             ...user,
-            votingHistory: {} // Clear all voting history
+            votingHistory: {} // Reset only the voting history
           };
         }
         return user;
       });
+      
+      // Save updated users to localStorage
       localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
       
-      // Now call the context function
+      // Update users in Firebase - preserve their data structure but clear voting history
+      for (const user of updatedUsers) {
+        if (user.id) {
+          // Get reference to user's voting history specifically
+          const userVotingHistoryRef = ref(database, `users/${user.id}/votingHistory`);
+          // Clear only the voting history
+          await set(userVotingHistoryRef, {});
+          console.log(`Reset voting history for user ${user.id}`);
+        }
+      }
+      
+      // Call the context function to reset event state
       resetEventState();
       
       // Force refresh the page

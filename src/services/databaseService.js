@@ -90,16 +90,25 @@ export const saveUsers = async (users) => {
       // Convert users array to object if necessary
       const usersObject = Array.isArray(users) 
         ? users.reduce((acc, user) => {
-            acc[user.id] = user;
+            if (user.id) {
+              acc[user.id] = user;
+            }
             return acc;
           }, {})
         : users;
       
-      // Save to Firebase
-      await set(ref(database, 'users'), usersObject);
+      // Save each user individually to their own path
+      for (const userId in usersObject) {
+        if (Object.prototype.hasOwnProperty.call(usersObject, userId)) {
+          const userRef = ref(database, `users/${userId}`);
+          await set(userRef, usersObject[userId]);
+          console.log(`Saved user ${userId} to Firebase`);
+        }
+      }
       
       // Also update localStorage
-      localStorage.setItem('sailing_nationals_users', JSON.stringify(Array.isArray(users) ? users : Object.values(usersObject)));
+      localStorage.setItem('sailing_nationals_users', 
+                           JSON.stringify(Array.isArray(users) ? users : Object.values(usersObject)));
       
       console.log("Users saved successfully");
       return true;
