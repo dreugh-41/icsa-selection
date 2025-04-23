@@ -446,40 +446,17 @@ export function EventProvider({ children }) {
 
   // 6. qualifyTeams function
   const qualifyTeams = (newQualifiedTeams) => {
+    console.log("Adding teams to pending qualified list:", newQualifiedTeams);
+    
     setEventState(prev => {
       // Ensure pendingQualifiedTeams is an array
       const currentPendingTeams = Array.isArray(prev.pendingQualifiedTeams) 
           ? prev.pendingQualifiedTeams 
           : [];
       
-      // Get all team IDs that are already in pending or qualified lists
-      const existingQualifiedIds = new Set([
-          ...currentPendingTeams.map(team => team.id),
-          ...(prev.qualifiedTeams || []).map(team => team.id)
-      ]);
-      
-      // Filter out teams that are already qualified through any method
-      const uniqueNewTeams = newQualifiedTeams.filter(team => 
-          !existingQualifiedIds.has(team.id)
-      );
-      
-      console.log(`Adding ${uniqueNewTeams.length} unique teams to pending qualified list`);
-
-      // Log the team qualification
-      addLogEntry(prev.selectionType, {
-        event: 'teams_qualified',
-        phase: prev.phase,
-        round: prev.currentRound,
-        newlyQualifiedTeams: uniqueNewTeams.map(team => ({
-          id: team.id,
-          name: team.name,
-          qualificationMethod: team.status.qualificationMethod
-        }))
-      });
-      
       return {
-          ...prev,
-          pendingQualifiedTeams: [...currentPendingTeams, ...uniqueNewTeams]
+        ...prev,
+        pendingQualifiedTeams: [...currentPendingTeams, ...newQualifiedTeams]
       };
     });
   };
