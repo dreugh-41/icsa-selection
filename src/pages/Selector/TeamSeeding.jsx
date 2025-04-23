@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useEvent } from '../../contexts/EventContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { safeGet, safeArrayLength } from '../../utils/safeFetch';
 
 function TeamSeeding() {
     const { eventState } = useEvent();
@@ -19,158 +20,133 @@ function TeamSeeding() {
     
     // Initialize when component loads
     useEffect(() => {
-        // Combine qualifiedTeams and pendingQualifiedTeams into one array
-        const allQualifiedTeams = [
-            ...(eventState.qualifiedTeams || []),
-            ...(eventState.pendingQualifiedTeams || [])
-        ];
-        
-        // Filter out alternates and sort alphabetically
-        const nonAlternates = allQualifiedTeams.filter(team => 
-            !team.status.isAlternate && 
-            team.status.qualificationMethod !== 'ALTERNATE'
-        );
-        
-        const sortedTeams = [...nonAlternates].sort((a, b) => 
-            a.name.localeCompare(b.name)
-        );
-        
-        setQualifiedTeams(sortedTeams);
-        
-        // Check if user has already submitted seeding
-        const hasSubmitted = user?.votingHistory?.seeding?.submitted || false;
-        setIsSubmitted(hasSubmitted);
-
-        // Calculate non-alternate count
-        const count = allQualifiedTeams.filter(team => 
-            !team.status.isAlternate && 
-            team.status.qualificationMethod !== 'ALTERNATE'
-        ).length;
-        setNonAlternateCount(count);
-        
-        // If user has already submitted, load their rankings
-        if (hasSubmitted && user?.votingHistory?.seeding?.rankings) {
-            const teamIds = user.votingHistory.seeding.rankings;
-            const rankedTeamsList = teamIds.map(id => {
-                return nonAlternates.find(team => team.id === id) || { id, name: 'Unknown Team' };
-            });
-            setRankedTeams(rankedTeamsList);
-            setQualifiedTeams([]);
-        }
-
-        if (hasSubmitted) {
-            const allUsers = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
-            const selectorUsers = allUsers.filter(u => 
-                u.role === 'selector' && 
-                u.id !== user.id && 
-                u.votingHistory?.seeding?.submitted
-            );
-            
-            // Get seeding rankings from other selectors
-            const otherSeedings = selectorUsers.map(selector => {
-                const rankings = selector.votingHistory.seeding.rankings || [];
-                // Map team IDs to actual team objects
-                const rankedTeams = rankings.map(teamId => {
-                    const team = nonAlternates.find(t => t.id === teamId);
-                    return team ? { 
-                        id: teamId, 
-                        name: team.name,
-                        selectorId: selector.id,
-                        selectorName: selector.name
-                    } : null;
-                }).filter(Boolean);
-                
-                return {
-                    selectorId: selector.id,
-                    selectorName: selector.name,
-                    rankings: rankedTeams
-                };
-            });
-            
-            setOtherSelectorSeedings(otherSeedings);
-        }
-
-        // Add after setting otherSelectorSeedings
-        // In the existing useEffect
-        if (hasSubmitted) {
-            // First, define selectorUsers
-            const allUsers = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
-            const selectorUsers = allUsers.filter(u => 
-                u.role === 'selector' && 
-                u.id !== user.id && 
-                u.votingHistory?.seeding?.submitted
-            );
-            
-            // Get seeding rankings from other selectors
-            const otherSeedings = selectorUsers.map(selector => {
-                const rankings = selector.votingHistory.seeding.rankings || [];
-                // Map team IDs to actual team objects
-                const rankedTeams = rankings.map(teamId => {
-                    const team = nonAlternates.find(t => t.id === teamId);
-                    return team ? { 
-                        id: teamId, 
-                        name: team.name,
-                        selectorId: selector.id,
-                        selectorName: selector.name
-                    } : null;
-                }).filter(Boolean);
-                
-                return {
-                    selectorId: selector.id,
-                    selectorName: selector.name,
-                    rankings: rankedTeams
-                };
-            });
-            
-            setOtherSelectorSeedings(otherSeedings);
-            
-            // Calculate average seedings across all selectors
-            // Include current user's rankings
-            const allSelectors = [
-                {
-                    selectorId: user.id,
-                    rankings: user.votingHistory.seeding.rankings || []
-                },
-                ...selectorUsers.map(selector => ({
-                    selectorId: selector.id,
-                    rankings: selector.votingHistory.seeding.rankings || []
-                }))
+        try {
+            // Combine qualifiedTeams and pendingQualifiedTeams into one array
+            const allQualifiedTeams = [
+                ...(safeGet(eventState, 'qualifiedTeams', [])),
+                ...(safeGet(eventState, 'pendingQualifiedTeams', []))
             ];
             
-            // Collect all rankings to calculate averages
-            const teamRankSums = {};
-            const teamRankCounts = {};
-            
-            allSelectors.forEach(selector => {
-                selector.rankings.forEach((teamId, index) => {
-                    if (!teamRankSums[teamId]) {
-                        teamRankSums[teamId] = 0;
-                        teamRankCounts[teamId] = 0;
-                    }
-                    
-                    teamRankSums[teamId] += (index + 1); // Add rank (1-based)
-                    teamRankCounts[teamId]++;
-                });
-            });
-            
-            // Calculate average seedings
-            const averages = Object.keys(teamRankSums).map(teamId => {
-                const team = nonAlternates.find(t => t.id === teamId);
-                return {
-                    id: teamId,
-                    name: team ? team.name : 'Unknown Team',
-                    averageSeed: (teamRankSums[teamId] / teamRankCounts[teamId]).toFixed(2)
-                };
-            });
-            
-            // Sort by average seed
-            const sortedAverages = averages.sort((a, b) => 
-                parseFloat(a.averageSeed) - parseFloat(b.averageSeed)
+            // Filter out alternates and sort alphabetically
+            const nonAlternates = allQualifiedTeams.filter(team => 
+                !safeGet(team, 'status.isAlternate', false) && 
+                safeGet(team, 'status.qualificationMethod') !== 'ALTERNATE'
             );
             
-            setAverageSeedings(sortedAverages);
+            const sortedTeams = [...nonAlternates].sort((a, b) => 
+                a.name.localeCompare(b.name)
+            );
+            
+            setQualifiedTeams(sortedTeams);
+            
+            // Check if user has already submitted seeding
+            const hasSubmitted = safeGet(user, 'votingHistory.seeding.submitted', false);
+            setIsSubmitted(hasSubmitted);
+
+            // Calculate non-alternate count
+            const count = allQualifiedTeams.filter(team => 
+                !safeGet(team, 'status.isAlternate', false) && 
+                safeGet(team, 'status.qualificationMethod') !== 'ALTERNATE'
+            ).length;
+            setNonAlternateCount(count);
+            
+            // If user has already submitted, load their rankings
+            if (hasSubmitted && Array.isArray(safeGet(user, 'votingHistory.seeding.rankings'))) {
+                const teamIds = safeGet(user, 'votingHistory.seeding.rankings', []);
+                const rankedTeamsList = teamIds.map(id => {
+                    return nonAlternates.find(team => team.id === id) || { id, name: 'Unknown Team' };
+                });
+                setRankedTeams(rankedTeamsList);
+                setQualifiedTeams([]);
+            }
+
+            if (hasSubmitted) {
+                const allUsers = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+                const selectorUsers = allUsers.filter(u => 
+                    u.role === 'selector' && 
+                    u.id !== safeGet(user, 'id') && 
+                    safeGet(u, 'votingHistory.seeding.submitted')
+                );
+                
+                // Get seeding rankings from other selectors
+                const otherSeedings = selectorUsers.map(selector => {
+                    const rankings = safeGet(selector, 'votingHistory.seeding.rankings', []);
+                    // Map team IDs to actual team objects
+                    const rankedTeams = rankings.map(teamId => {
+                        const team = nonAlternates.find(t => t.id === teamId);
+                        return team ? { 
+                            id: teamId, 
+                            name: team.name,
+                            selectorId: selector.id,
+                            selectorName: selector.name
+                        } : null;
+                    }).filter(Boolean);
+                    
+                    return {
+                        selectorId: selector.id,
+                        selectorName: selector.name,
+                        rankings: rankedTeams
+                    };
+                });
+                
+                setOtherSelectorSeedings(otherSeedings);
+                
+                // Calculate average seedings across all selectors
+                // Include current user's rankings
+                const allSelectors = [
+                    {
+                        selectorId: safeGet(user, 'id'),
+                        rankings: safeGet(user, 'votingHistory.seeding.rankings', [])
+                    },
+                    ...selectorUsers.map(selector => ({
+                        selectorId: selector.id,
+                        rankings: safeGet(selector, 'votingHistory.seeding.rankings', [])
+                    }))
+                ];
+                
+                // Collect all rankings to calculate averages
+                const teamRankSums = {};
+                const teamRankCounts = {};
+                
+                allSelectors.forEach(selector => {
+                    selector.rankings.forEach((teamId, index) => {
+                        if (!teamRankSums[teamId]) {
+                            teamRankSums[teamId] = 0;
+                            teamRankCounts[teamId] = 0;
+                        }
+                        
+                        teamRankSums[teamId] += (index + 1); // Add rank (1-based)
+                        teamRankCounts[teamId]++;
+                    });
+                });
+                
+                // Calculate average seedings
+                const averages = Object.keys(teamRankSums).map(teamId => {
+                    const team = nonAlternates.find(t => t.id === teamId);
+                    return {
+                        id: teamId,
+                        name: team ? team.name : 'Unknown Team',
+                        averageSeed: teamRankCounts[teamId] > 0 
+                            ? (teamRankSums[teamId] / teamRankCounts[teamId]).toFixed(2)
+                            : "N/A"
+                    };
+                });
+                
+                // Sort by average seed
+                const sortedAverages = averages.sort((a, b) => {
+                    const aVal = parseFloat(a.averageSeed);
+                    const bVal = parseFloat(b.averageSeed);
+                    return isNaN(aVal) || isNaN(bVal) ? 0 : aVal - bVal;
+                });
+                
+                setAverageSeedings(sortedAverages);
+            }
+        } catch (error) {
+            console.error("Error initializing TeamSeeding:", error);
+            setQualifiedTeams([]);
+            setRankedTeams([]);
         }
-    }, [eventState.qualifiedTeams, eventState.pendingQualifiedTeams, user]);
+    }, [eventState, user]);
     
     // Add a team to the rankings
     const addToRanking = (team) => {
@@ -212,49 +188,54 @@ function TeamSeeding() {
     
     // Filter teams based on search term
     const filterTeams = (teams) => {
-        if (!searchTerm.trim()) return teams;
+        if (!searchTerm.trim() || !Array.isArray(teams)) return teams || [];
         
         return teams.filter(team => 
-            team.name.toLowerCase().includes(searchTerm.toLowerCase())
+            team?.name?.toLowerCase().includes(searchTerm.toLowerCase())
         );
     };
     
     // Submit seeding rankings
     const submitSeeding = () => {
-        // Count the total number of non-alternate qualified teams
-        const nonAlternateCount = [...eventState.qualifiedTeams, ...eventState.pendingQualifiedTeams]
-            .filter(team => !team.status.isAlternate && team.status.qualificationMethod !== 'ALTERNATE')
-            .length;
-        
-        if (rankedTeams.length !== nonAlternateCount) {
-            alert(`Please rank all ${nonAlternateCount} qualified teams before submitting.`);
-            return;
-        }
-        
-        // Prepare the seeding data
-        const seedingData = {
-            rankings: rankedTeams.map(team => team.id),
-            submitted: true,
-            timestamp: new Date().toISOString()
-        };
-        
-        // Update the user's voting history for seeding
-        const updatedUser = {
-            ...user,
-            votingHistory: {
-                ...user.votingHistory,
-                seeding: seedingData
+        try {
+            // Count the total number of non-alternate qualified teams
+            const nonAlternateCount = [...safeGet(eventState, 'qualifiedTeams', []), ...safeGet(eventState, 'pendingQualifiedTeams', [])]
+                .filter(team => !safeGet(team, 'status.isAlternate', false) && safeGet(team, 'status.qualificationMethod') !== 'ALTERNATE')
+                .length;
+            
+            if (safeArrayLength(rankedTeams) !== nonAlternateCount) {
+                alert(`Please rank all ${nonAlternateCount} qualified teams before submitting.`);
+                return;
             }
-        };
-        
-        // Save the updated user
-        updateUser(updatedUser);
-        
-        // Mark the form as submitted
-        setIsSubmitted(true);
-        
-        // Show success message
-        alert("Your seeding rankings have been submitted successfully!");
+            
+            // Prepare the seeding data
+            const seedingData = {
+                rankings: rankedTeams.map(team => team.id),
+                submitted: true,
+                timestamp: new Date().toISOString()
+            };
+            
+            // Update the user's voting history for seeding
+            const updatedUser = {
+                ...user,
+                votingHistory: {
+                    ...(safeGet(user, 'votingHistory', {})),
+                    seeding: seedingData
+                }
+            };
+            
+            // Save the updated user
+            updateUser(updatedUser);
+            
+            // Mark the form as submitted
+            setIsSubmitted(true);
+            
+            // Show success message
+            alert("Your seeding rankings have been submitted successfully!");
+        } catch (error) {
+            console.error("Error submitting seeding:", error);
+            alert("An error occurred while submitting your seedings. Please try again.");
+        }
     };
     
     return (

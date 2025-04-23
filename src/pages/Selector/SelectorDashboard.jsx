@@ -9,56 +9,90 @@ import realTimeService from '../../utils/services/realTimeService';
 import TeamSeeding from './TeamSeeding';
 import CompletionSummary from '../../components/CompletionSummary';
 import SeedingAdjustments from '../../components/parliamentarian/SeedingAdjustments';
+import { safeGet, safeArrayLength } from '../../utils/safeFetch';
 
 function SelectorDashboard() {
     const { eventState, loading } = useEvent();
-
     const [forceUpdate, setForceUpdate] = useState(false);
-    
+    const [hasError, setHasError] = useState(false);
+  
     useEffect(() => {
+      try {
         const subscription = realTimeService.subscribe('state_updated', () => {
-            setForceUpdate(prev => !prev);
+          setForceUpdate(prev => !prev);
         });
         return () => subscription();
+      } catch (error) {
+        console.error("Subscription error:", error);
+        setHasError(true);
+      }
     }, []);
-
+  
+    // Debug log the event state
+    useEffect(() => {
+      console.log("SelectorDashboard - Event state:", eventState);
+    }, [eventState]);
+  
     if (loading) {
-        return (
-            <div className="flex justify-center items-center h-64">
-                <div className="spinner">Loading...</div>
-            </div>
-        );
+      return <div className="p-6 text-center">Loading...</div>;
+    }
+  
+    if (hasError) {
+      return (
+        <div className="p-6 bg-red-50 rounded-lg">
+          <h2 className="text-xl font-bold text-red-700">Something went wrong</h2>
+          <p className="mt-2">There was an error loading the dashboard. Please try refreshing the page.</p>
+        </div>
+      );
     }
 
     // Helper function to determine what component to show based on the current phase
     const renderPhaseComponent = () => {
-        switch (eventState.phase) {
-            case EVENT_PHASES.ROUND1_LOCK:
-                return <LockVoting />;
-            case EVENT_PHASES.ROUND_LEFTOVER:
-            case EVENT_PHASES.ALTERNATE_LEFTOVER: // Add this case
-                return <LeftoverVoting />;
-            case EVENT_PHASES.ROUND_RANKING:
-            case EVENT_PHASES.ALTERNATE_RANKING: // Add this case
-                return <TeamRanking />;
-            case EVENT_PHASES.SEEDING:
-                return <TeamSeeding />;
-            case EVENT_PHASES.SEEDING_ADJUSTMENTS: // Add this case
-                return <SeedingAdjustments />;
-            case EVENT_PHASES.COMPLETED:
-                return <CompletionSummary />;
-            default:
-                return (
-                    <div className="bg-white p-6 rounded-lg shadow-sm">
-                        <h2 className="text-xl font-semibold mb-4">Waiting for Next Phase</h2>
-                        <p>The parliamentarian will advance the selection process when ready.</p>
-                        <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                            <p className="text-sm text-blue-700">
-                                Current Phase: {getCurrentPhaseDisplay()}
-                            </p>
+        try {
+            const currentPhase = safeGet(eventState, 'phase');
+            console.log("SelectorDashboard - Current phase:", currentPhase);
+            
+            switch (currentPhase) {
+                case EVENT_PHASES.ROUND1_LOCK:
+                    return <LockVoting />;
+                case EVENT_PHASES.ROUND_LEFTOVER:
+                case EVENT_PHASES.ALTERNATE_LEFTOVER:
+                    return <LeftoverVoting />;
+                case EVENT_PHASES.ROUND_RANKING:
+                case EVENT_PHASES.ALTERNATE_RANKING:
+                    return <TeamRanking />;
+                case EVENT_PHASES.SEEDING:
+                    return <TeamSeeding />;
+                case EVENT_PHASES.SEEDING_ADJUSTMENTS:
+                    return <SeedingAdjustments />;
+                case EVENT_PHASES.COMPLETED:
+                    return <CompletionSummary />;
+                default:
+                    return (
+                        <div className="bg-white p-6 rounded-lg shadow-sm">
+                            <h2 className="text-xl font-semibold mb-4">Waiting for Next Phase</h2>
+                            <p>The parliamentarian will advance the selection process when ready.</p>
+                            <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                                <p className="text-sm text-blue-700">
+                                    Current Phase: {getCurrentPhaseDisplay()}
+                                </p>
+                            </div>
                         </div>
+                    );
+            }
+        } catch (error) {
+            console.error("Error rendering phase component:", error);
+            return (
+                <div className="bg-white p-6 rounded-lg shadow-sm">
+                    <h2 className="text-xl font-semibold mb-4 text-red-600">Something went wrong</h2>
+                    <p className="text-gray-700">An error occurred while rendering the current phase.</p>
+                    <div className="mt-4 p-4 bg-red-50 rounded-lg">
+                        <p className="text-sm text-red-700">
+                            Please refresh the page or contact the administrator.
+                        </p>
                     </div>
-                );
+                </div>
+            );
         }
     };
 
@@ -82,38 +116,38 @@ function SelectorDashboard() {
 
     // Display information about qualified teams
     const renderQualifiedTeamsInfo = () => {
-        // Check if eventState.qualifiedTeams exists before accessing it
-        const qualifiedTeamsCount = eventState.qualifiedTeams?.length || 0;
-        
+        const qualifiedTeams = safeGet(eventState, 'qualifiedTeams', []);
+        const remainingBerths = safeGet(eventState, 'remainingBerths', 0);
+      
         return (
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-                <h2 className="text-xl font-semibold mb-4">Qualification Status</h2>
-                <div className="flex items-center justify-between mb-4">
-                    <div>
-                        <p className="text-gray-700">Teams Qualified: {qualifiedTeamsCount}</p>
-                        <p className="text-gray-700">Remaining Berths: {eventState.remainingBerths || 0}</p>
-                    </div>
-                </div>
-                
-                {(eventState.qualifiedTeams && eventState.qualifiedTeams.length > 0) && (
-                    <div className="mt-4">
-                        <h3 className="text-lg font-medium mb-2">Qualified Teams</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {eventState.qualifiedTeams.map(team => (
-                                <div key={team.id} 
-                                     className="p-2 bg-green-50 rounded-lg flex justify-between items-center">
-                                    <span>{team.name}</span>
-                                    <span className="text-sm text-green-600">
-                                        {team.status?.qualificationMethod || 'Unknown'}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
+          <div className="bg-white p-6 rounded-lg shadow-sm">
+            <h2 className="text-xl font-semibold mb-4">Qualification Status</h2>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-gray-700">Teams Qualified: {safeArrayLength(qualifiedTeams)}</p>
+                <p className="text-gray-700">Remaining Berths: {remainingBerths}</p>
+              </div>
             </div>
+            
+            {safeArrayLength(qualifiedTeams) > 0 && (
+              <div className="mt-4">
+                <h3 className="text-lg font-medium mb-2">Qualified Teams</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {qualifiedTeams.map(team => (
+                    <div key={team.id} 
+                         className="p-2 bg-green-50 rounded-lg flex justify-between items-center">
+                      <span>{team.name}</span>
+                      <span className="text-sm text-green-600">
+                        {safeGet(team, 'status.qualificationMethod', 'Unknown')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         );
-    };
+      };
 
     return (
         <div className="space-y-6">

@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useEvent } from '../../contexts/EventContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { safeGet, safeArrayLength } from '../../utils/safeFetch';
 
 function LockVoting() {
     const { eventState } = useEvent();
@@ -9,27 +10,31 @@ function LockVoting() {
     
     // Initialize from user's voting history if it exists
     const [selectedLocks, setSelectedLocks] = useState(() => {
-        const savedVotes = user?.votingHistory?.round1?.lockVotes || [];
+        const savedVotes = safeGet(user, 'votingHistory.round1.lockVotes', []);
         return new Set(savedVotes);
     });
     
     // Check if the user has already submitted votes
     const [isSubmitted, setIsSubmitted] = useState(() => {
-        return user?.votingHistory?.round1?.submitted || false;
+        return safeGet(user, 'votingHistory.round1.submitted', false);
     });
     
     const [searchTerm, setSearchTerm] = useState('');
     
     // Add this effect to update if user changes
     useEffect(() => {
-        if (user?.votingHistory?.round1) {
-            setSelectedLocks(new Set(user.votingHistory.round1.lockVotes || []));
-            setIsSubmitted(user.votingHistory.round1.submitted || false);
+        try {
+            if (safeGet(user, 'votingHistory.round1')) {
+                setSelectedLocks(new Set(safeGet(user, 'votingHistory.round1.lockVotes', [])));
+                setIsSubmitted(safeGet(user, 'votingHistory.round1.submitted', false));
+            }
+        } catch (error) {
+            console.error("Error updating from user data:", error);
         }
     }, [user]);
 
     // All teams sorted alphabetically
-    const sortedTeams = [...eventState.teams].sort((a, b) => 
+    const sortedTeams = [...(safeGet(eventState, 'teams', []))].sort((a, b) => 
         a.name.localeCompare(b.name)
     );
 
@@ -51,42 +56,44 @@ function LockVoting() {
 
     // Filter teams based on search term
     const filterTeams = (teams) => {
-        if (!searchTerm.trim()) return teams;
+        if (!searchTerm.trim() || !Array.isArray(teams)) return teams || [];
         
         return teams.filter(team => 
-            team.name.toLowerCase().includes(searchTerm.toLowerCase())
-            // Remove the CSR rank search
-            // || team.csrRank.toString().includes(searchTerm)
+            team?.name?.toLowerCase().includes(searchTerm.toLowerCase())
         );
     };
 
     // Handle submission of lock votes
     const submitLockVotes = () => {
-      
-        // Prepare the voting data
-        const votingData = {
-          lockVotes: Array.from(selectedLocks),
-          submitted: true,
-          timestamp: new Date().toISOString()
-        };
-      
-        // Update the user's voting history
-        const updatedUser = {
-          ...user,
-          votingHistory: {
-            ...user.votingHistory,
-            round1: votingData
-          }
-        };
-      
-        // Save the updated user
-        updateUser(updatedUser);
-        
-        // Mark the form as submitted
-        setIsSubmitted(true);
-        
-        // Show success message
-        alert("Your lock votes have been submitted successfully!");
+        try {
+            // Prepare the voting data
+            const votingData = {
+                lockVotes: Array.from(selectedLocks),
+                submitted: true,
+                timestamp: new Date().toISOString()
+            };
+            
+            // Update the user's voting history
+            const updatedUser = {
+                ...user,
+                votingHistory: {
+                    ...(safeGet(user, 'votingHistory', {})),
+                    round1: votingData
+                }
+            };
+            
+            // Save the updated user
+            updateUser(updatedUser);
+            
+            // Mark the form as submitted
+            setIsSubmitted(true);
+            
+            // Show success message
+            alert("Your lock votes have been submitted successfully!");
+        } catch (error) {
+            console.error("Error submitting lock votes:", error);
+            alert("An error occurred while submitting your votes. Please try again.");
+        }
     };
 
     return (
@@ -100,7 +107,7 @@ function LockVoting() {
                         <p className="mb-4">Your lock votes have been recorded.</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
                             {[...selectedLocks].map(teamId => {
-                                const team = eventState.teams.find(t => t.id === teamId);
+                                const team = safeGet(eventState, 'teams', []).find(t => t.id === teamId);
                                 return (
                                     <div key={teamId} className="bg-white p-3 rounded border border-green-200">
                                         {team ? team.name : teamId}
@@ -124,7 +131,7 @@ function LockVoting() {
                         {/* Selection Status */}
                         <div className="mb-6 p-4 bg-blue-50 rounded-lg">
                             <p className="text-blue-700">
-                                Teams Selected: {selectedLocks.size}
+                                Teams Selected: {safeArrayLength([...selectedLocks])}
                             </p>
                             <p className="text-sm text-gray-600 mt-2">
                                 Select the teams you believe should automatically qualify based on their performance throughout the season.
@@ -146,7 +153,7 @@ function LockVoting() {
                                     type="text"
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    placeholder="Search teams by name or CSR rank..."
+                                    placeholder="Search teams by name..."
                                     className="w-full p-3 border border-gray-300 rounded-lg pl-10"
                                 />
                                 <div className="absolute left-3 top-3.5 text-gray-400">
@@ -177,7 +184,7 @@ function LockVoting() {
                                         All Teams
                                     </div>
                                     <div className="text-sm bg-blue-100 px-2 py-1 rounded">
-                                        {filterTeams(sortedTeams).length} teams
+                                        {safeArrayLength(filterTeams(sortedTeams))} teams
                                     </div>
                                 </div>
                                 <div className="max-h-96 overflow-y-auto">
@@ -190,8 +197,6 @@ function LockVoting() {
                                         >
                                             <div>
                                                 <p className="font-medium">{team.name}</p>
-                                                {/* Remove this line that shows CSR rank */}
-                                                {/* <p className="text-sm text-gray-600">CSR Rank: {team.csrRank}</p> */}
                                             </div>
                                             <input
                                                 type="checkbox"

@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useEvent, EVENT_PHASES } from '../../contexts/EventContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { safeGet, safeArrayLength } from '../../utils/safeFetch';
 
 function TeamRanking() {
     const { eventState } = useEvent();
@@ -102,16 +103,16 @@ function TeamRanking() {
     
     // Load unranked teams excluding any already ranked
     useEffect(() => {
-        console.log("Ranking Group Length:", eventState.rankingGroup?.length || 0);
-        console.log("Current Ranking Group:", eventState.rankingGroup);
-        
-        if (!eventState.rankingGroup || eventState.rankingGroup.length === 0) {
+        try {
+          console.log("Ranking Group Length:", safeArrayLength(eventState.rankingGroup));
+          
+          if (!eventState.rankingGroup || eventState.rankingGroup.length === 0) {
             setUnrankedTeams([]);
             return;
           }
           
           // Get the ranking group (make a copy to avoid reference issues)
-          const rankingGroupTeams = [...eventState.rankingGroup];
+          const rankingGroupTeams = [...(eventState.rankingGroup || [])];
           
           // Filter out teams that are already ranked or already qualified
           const rankedTeamIds = new Set(rankedTeams.map(team => team.id));
@@ -125,7 +126,11 @@ function TeamRanking() {
           ).sort((a, b) => a.name.localeCompare(b.name));
           
           setUnrankedTeams(availableTeams);
-    }, [eventState.rankingGroup, rankedTeams, eventState.qualifiedTeams, eventState.pendingQualifiedTeams]);
+        } catch (error) {
+          console.error("Error loading unranked teams:", error);
+          setUnrankedTeams([]);
+        }
+      }, [eventState.rankingGroup, rankedTeams, eventState.qualifiedTeams, eventState.pendingQualifiedTeams]);
     
     // Add this effect to update if user or round changes
     useEffect(() => {
@@ -146,37 +151,44 @@ function TeamRanking() {
     
     // Update the submit function
     const submitRankings = () => {
-        // Check if all teams in the ranking group have been ranked
-        if (rankedTeams.length !== eventState.rankingGroup.length) {
-        alert(`Please rank all ${eventState.rankingGroup.length} teams before submitting. You've currently ranked ${rankedTeams.length} teams.`);
-        return;
+        try {
+          // Check if all teams in the ranking group have been ranked
+          const rankingGroupLength = safeArrayLength(eventState.rankingGroup);
+          
+          if (safeArrayLength(rankedTeams) !== rankingGroupLength) {
+            alert(`Please rank all ${rankingGroupLength} teams before submitting. You've currently ranked ${safeArrayLength(rankedTeams)} teams.`);
+            return;
+          }
+          
+          // Prepare the ranking data
+          const rankingData = {
+            rankings: rankedTeams.map(team => team.id),
+            submitted: true,
+            timestamp: new Date().toISOString()
+          };
+          
+          // Update the user's voting history for this specific round
+          const updatedUser = {
+            ...user,
+            votingHistory: {
+              ...(user?.votingHistory || {}),
+              [roundKey]: rankingData
+            }
+          };
+          
+          // Save the updated user
+          updateUser(updatedUser);
+          
+          // Mark the form as submitted
+          setIsSubmitted(true);
+          
+          // Show success message
+          alert("Your rankings have been submitted successfully!");
+        } catch (error) {
+          console.error("Error submitting rankings:", error);
+          alert("There was an error submitting your rankings. Please try again.");
         }
-        
-        // Prepare the ranking data
-        const rankingData = {
-        rankings: rankedTeams.map(team => team.id),
-        submitted: true,
-        timestamp: new Date().toISOString()
-        };
-        
-        // Update the user's voting history for this specific round
-        const updatedUser = {
-        ...user,
-        votingHistory: {
-            ...user.votingHistory,
-            [roundKey]: rankingData
-        }
-        };
-        
-        // Save the updated user
-        updateUser(updatedUser);
-        
-        // Mark the form as submitted
-        setIsSubmitted(true);
-        
-        // Show success message
-        alert("Your rankings have been submitted successfully!");
-    };
+      };
     
     // Handle adding a team to the ranked list
     const addToRanking = (team) => {

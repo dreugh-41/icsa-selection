@@ -2,7 +2,7 @@
 export const safeGet = (obj, path, defaultValue = null) => {
     try {
       const keys = path.split('.');
-      let result = { ...obj };
+      let result = obj;
       
       for (const key of keys) {
         if (result === undefined || result === null) {
