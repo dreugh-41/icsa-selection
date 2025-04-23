@@ -32,13 +32,17 @@ function LockVoteMonitoring() {
             const allUsers = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
             console.log("Found users:", allUsers.length);
             
-            const selectorUsers = allUsers.filter(u => u.role === 'selector');
+            const selectorUsers = allUsers.filter(u => u && u.role === 'selector');
             console.log("Found selectors:", selectorUsers.length);
             
             // Get selector status with detailed logging
             const selectorStatus = selectorUsers.map(selector => {
-                const hasVoted = safeGet(selector, 'votingHistory.round1.submitted', false);
-                const timestamp = safeGet(selector, 'votingHistory.round1.timestamp', null);
+                const hasVoted = selector && selector.votingHistory && 
+                             selector.votingHistory.round1 && 
+                             selector.votingHistory.round1.submitted || false;
+                const timestamp = selector && selector.votingHistory && 
+                              selector.votingHistory.round1 && 
+                              selector.votingHistory.round1.timestamp || null;
                 
                 console.log(`Selector ${selector.name}: voted=${hasVoted}, timestamp=${timestamp}`);
                 
@@ -54,13 +58,15 @@ function LockVoteMonitoring() {
             
             // Count each team's votes with detailed logging
             const voteCounts = {};
-            const votingSelectors = selectorUsers.filter(s => safeGet(s, 'votingHistory.round1.submitted', false)).length;
+            const votingSelectors = selectorUsers.filter(s => s && s.votingHistory && 
+                                                  s.votingHistory.round1 && 
+                                                  s.votingHistory.round1.submitted).length;
             console.log("Selectors who voted:", votingSelectors);
             
             // If no one has voted yet, just show empty data
             if (votingSelectors === 0) {
-                const emptyVotes = safeGet(eventState, 'teams', [])
-                    .filter(team => !safeGet(team, 'status.isQualified', false))
+                const emptyVotes = (eventState && eventState.teams ? eventState.teams : [])
+                    .filter(team => !(team && team.status && team.status.isQualified))
                     .map(team => ({
                         ...team,
                         votePercentage: 0,
@@ -73,13 +79,19 @@ function LockVoteMonitoring() {
             }
             
             // Initialize vote counts for all teams
-            safeGet(eventState, 'teams', []).forEach(team => {
-                voteCounts[team.id] = 0;
-            });
+            if (eventState && eventState.teams) {
+                eventState.teams.forEach(team => {
+                    if (team && team.id) {
+                        voteCounts[team.id] = 0;
+                    }
+                });
+            }
             
             // Count votes from each selector's voting history with detailed logging
             selectorUsers.forEach(selector => {
-                const votes = safeGet(selector, 'votingHistory.round1.lockVotes', []);
+                const votes = selector && selector.votingHistory && 
+                             selector.votingHistory.round1 && 
+                             selector.votingHistory.round1.lockVotes || [];
                 console.log(`Selector ${selector.name}: ${votes.length} lock votes`);
                 
                 votes.forEach(teamId => {
@@ -90,8 +102,8 @@ function LockVoteMonitoring() {
             });
             
             // Calculate percentages and qualifies status
-            const processedTeamVotes = safeGet(eventState, 'teams', [])
-                .filter(team => !safeGet(team, 'status.isQualified', false))
+            const processedTeamVotes = (eventState && eventState.teams ? eventState.teams : [])
+                .filter(team => !(team && team.status && team.status.isQualified))
                 .map(team => {
                     const voteCount = voteCounts[team.id] || 0;
                     const votePercentage = votingSelectors > 0 
@@ -216,13 +228,13 @@ function LockVoteMonitoring() {
                                 <div>
                                     <p className="font-medium">Selector Voting Progress</p>
                                     <p className="text-sm text-gray-600">
-                                        {selectors.filter(s => s.hasVoted).length} of {selectors.length} selectors have submitted their votes
+                                        {selectors && selectors.filter ? selectors.filter(s => s.hasVoted).length : 0} of {selectors.length} selectors have submitted their votes
                                     </p>
                                 </div>
                                 <div className="text-xl font-bold text-blue-600">
-                                    {selectors.length > 0 ? 
-                                        Math.round((selectors.filter(s => s.hasVoted).length / selectors.length) * 100) :
-                                        0}%
+                                {selectors && selectors.length > 0 ? 
+                                    Math.round(((selectors.filter ? selectors.filter(s => s.hasVoted).length : 0) / selectors.length) * 100) :
+                                    0}%
                                 </div>
                             </div>
                             

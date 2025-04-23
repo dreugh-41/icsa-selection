@@ -10,11 +10,13 @@ import SelectorDashboard from './pages/Selector/SelectorDashboard';
 import ParliamentarianDashboard from './pages/Parliamentarian/ParliamentarianDashboard';
 import Notification from './components/Notification';
 import AdminDashboard from './pages/Admin/AdminDashboard';
+import ErrorBoundary from './components/errorBoundary';
 
 function App() {
   return (
     <AuthProvider>
       <EventProvider>
+        <ErrorBoundary>
         <Router>
           <Routes>
             <Route path="/login" element={<Login />} />
@@ -60,6 +62,7 @@ function App() {
             />
           </Routes>
         </Router>
+        </ErrorBoundary>
         <Notification/>
       </EventProvider>
     </AuthProvider>
