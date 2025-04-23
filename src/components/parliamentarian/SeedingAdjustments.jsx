@@ -1,0 +1,327 @@
+// src/components/parliamentarian/SeedingAdjustments.jsx
+import React, { useState, useEffect } from 'react';
+import { useEvent } from '../../contexts/EventContext';
+import { useAuth } from '../../contexts/AuthContext';
+
+function SeedingAdjustments() {
+  const { eventState } = useEvent();
+  const { user } = useAuth();
+  const [eastTeams, setEastTeams] = useState([]);
+  const [westTeams, setWestTeams] = useState([]);
+  const [initializedTeams, setInitializedTeams] = useState(false);
+
+  // Define the seed numbers for East division
+  const eastSeeds = [1, 4, 5, 8, 9, 12, 13, 16, 17, 20, 21, 24, 25, 28, 29, 32, 33, 36];
+  
+  // Function to check if a seed belongs to East division
+  const isEastSeed = (seed) => eastSeeds.includes(seed);
+
+  // Initialize teams when component loads
+  useEffect(() => {
+    if (initializedTeams) return;
+    
+    // Check if there are saved adjustments to load
+    const savedAdjustments = localStorage.getItem('sailing_nationals_seeding_adjustments');
+    
+    if (savedAdjustments) {
+      try {
+        const { east, west } = JSON.parse(savedAdjustments);
+        
+        // If east and west teams exist and are arrays
+        if (Array.isArray(east) && Array.isArray(west)) {
+          setEastTeams(east);
+          setWestTeams(west);
+          setInitializedTeams(true);
+          return; // Skip the rest of initialization
+        }
+      } catch (e) {
+        console.error("Error loading saved adjustments:", e);
+        // Continue with normal initialization
+      }
+    }
+    
+    // Get all qualified teams (excluding alternates)
+    const qualifiedTeams = [...eventState.qualifiedTeams].filter(team => 
+      !team.status.isAlternate && team.status.qualificationMethod !== 'ALTERNATE'
+    );
+    
+    // Load seeding data
+    const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+    const selectorUsers = users.filter(u => u.role === 'selector' && u.votingHistory?.seeding?.submitted);
+    
+    // Calculate average seedings
+    const teamSeedSums = {};
+    const teamSeedCounts = {};
+    
+    // Collect all seedings from selectors
+    selectorUsers.forEach(selector => {
+      const seedings = selector.votingHistory.seeding.rankings || [];
+      
+      seedings.forEach((teamId, index) => {
+        if (!teamSeedSums[teamId]) {
+          teamSeedSums[teamId] = 0;
+          teamSeedCounts[teamId] = 0;
+        }
+        
+        teamSeedSums[teamId] += (index + 1); // Add the rank (1-based)
+        teamSeedCounts[teamId]++;
+      });
+    });
+    
+    // Calculate average seed for each team
+    const teamsWithSeeding = qualifiedTeams.map(team => {
+      let averageSeed = null;
+      if (teamSeedSums[team.id] && teamSeedCounts[team.id]) {
+        averageSeed = Math.round(teamSeedSums[team.id] / teamSeedCounts[team.id]);
+      }
+      
+      return {
+        ...team,
+        averageSeed: averageSeed || 999 // Default high value if no seeding data
+      };
+    });
+    
+    // Sort by average seed
+    const sortedTeams = [...teamsWithSeeding].sort((a, b) => a.averageSeed - b.averageSeed);
+    
+    // Assign seeds 1-36 based on sorted order
+    const teamsWithAssignedSeeds = sortedTeams.map((team, index) => ({
+      ...team,
+      assignedSeed: index + 1 // 1-based seeding
+    }));
+    
+    // Split into East and West based on the assigned seeds
+    const east = [];
+    const west = [];
+    
+    teamsWithAssignedSeeds.forEach(team => {
+      if (isEastSeed(team.assignedSeed)) {
+        east.push(team);
+      } else {
+        west.push(team);
+      }
+    });
+    
+    // Sort each division by seed
+    east.sort((a, b) => a.assignedSeed - b.assignedSeed);
+    west.sort((a, b) => a.assignedSeed - b.assignedSeed);
+    
+    setEastTeams(east);
+    setWestTeams(west);
+    setInitializedTeams(true);
+  }, [eventState.qualifiedTeams, initializedTeams]);
+
+  // Add a helper function to save adjustments
+  const saveAdjustmentsToStorage = (east, west) => {
+    const adjustments = {
+      east,
+      west,
+      timestamp: new Date().toISOString()
+    };
+    
+    localStorage.setItem('sailing_nationals_seeding_adjustments', JSON.stringify(adjustments));
+    
+    // Trigger a notification that the adjustments were saved
+    const notification = {
+      type: 'seeding_adjustments_updated',
+      timestamp: new Date().toISOString()
+    };
+    localStorage.setItem('sailing_nationals_notification', JSON.stringify(notification));
+  };
+
+  // Function to move team from East to West
+  const moveToWest = (team) => {
+    if (user.role !== 'parliamentarian') return;
+    
+    const updatedEastTeams = eastTeams.filter(t => t.id !== team.id);
+    const updatedWestTeams = [...westTeams, team].sort((a, b) => a.assignedSeed - b.assignedSeed);
+    
+    setEastTeams(updatedEastTeams);
+    setWestTeams(updatedWestTeams);
+    
+    // Save the updated divisions to localStorage
+    if (user.role === 'parliamentarian') {
+      saveAdjustmentsToStorage(updatedEastTeams, updatedWestTeams);
+    }
+  };
+
+  // Function to move team from West to East
+  const moveToEast = (team) => {
+    if (user.role !== 'parliamentarian') return;
+    
+    const updatedWestTeams = westTeams.filter(t => t.id !== team.id);
+    const updatedEastTeams = [...eastTeams, team].sort((a, b) => a.assignedSeed - b.assignedSeed);
+    
+    setWestTeams(updatedWestTeams);
+    setEastTeams(updatedEastTeams);
+    
+    // Save the updated divisions to localStorage
+    if (user.role === 'parliamentarian') {
+      saveAdjustmentsToStorage(updatedEastTeams, updatedWestTeams);
+    }
+  };
+
+  // Function for manual save button
+  const saveAdjustments = () => {
+    if (user.role !== 'parliamentarian') return;
+    
+    saveAdjustmentsToStorage(eastTeams, westTeams);
+    alert('Seeding adjustments have been saved successfully!');
+  };
+
+  // Add periodic check for updates (for selectors)
+  useEffect(() => {
+    if (user.role === 'parliamentarian') {
+      // Parliamentarians don't need to check for updates since they make them
+      return;
+    }
+    
+    // Check every 5 seconds for updates
+    const checkInterval = setInterval(() => {
+      const savedAdjustments = localStorage.getItem('sailing_nationals_seeding_adjustments');
+      
+      if (savedAdjustments) {
+        try {
+          const { east, west, timestamp } = JSON.parse(savedAdjustments);
+          
+          // Check if we have a newer timestamp than our current data
+          if (Array.isArray(east) && Array.isArray(west) && timestamp) {
+            // Compare with last loaded timestamp
+            const lastLoadedTime = localStorage.getItem('sailing_nationals_last_loaded_adjustment');
+            
+            if (!lastLoadedTime || timestamp > lastLoadedTime) {
+              // New data is available, update
+              setEastTeams(east);
+              setWestTeams(west);
+              localStorage.setItem('sailing_nationals_last_loaded_adjustment', timestamp);
+              console.log("Updated seeding adjustments from localStorage");
+            }
+          }
+        } catch (e) {
+          console.error("Error checking for adjustment updates:", e);
+        }
+      }
+    }, 5000);
+    
+    // Clean up interval on unmount
+    return () => clearInterval(checkInterval);
+  }, [user.role]);
+
+  return (
+    <div className="bg-white p-6 rounded-lg shadow-sm">
+      <h2 className="text-xl font-semibold mb-4">Championship Seeding Adjustments</h2>
+      
+      <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+        <p className="font-medium">Division Adjustments</p>
+        <p className="text-sm text-gray-600 mt-2">
+          Teams are divided into East and West divisions based on their seeding. 
+          {user.role === 'parliamentarian' ? 
+            " You can adjust which division each team belongs to while maintaining their original seeding." :
+            " The parliamentarian can adjust which division each team belongs to."}
+        </p>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* East Division */}
+        <div>
+          <h3 className="font-medium mb-3 text-blue-700">East Division</h3>
+          <div className="border rounded-lg overflow-hidden">
+            <div className="bg-blue-50 p-3 border-b font-medium">
+              Teams: {eastTeams.length}
+            </div>
+            <div className="divide-y max-h-96 overflow-y-auto">
+              {eastTeams.map(team => (
+                <div 
+                  key={team.id}
+                  className="p-3 flex justify-between items-center hover:bg-gray-50"
+                >
+                  <div className="flex items-center">
+                    <div className="w-8 h-8 flex items-center justify-center bg-blue-100 rounded-full mr-3">
+                      {team.assignedSeed}
+                    </div>
+                    <div>
+                      <p className="font-medium">{team.name}</p>
+                    </div>
+                  </div>
+                  {user.role === 'parliamentarian' && (
+                    <button
+                      onClick={() => moveToWest(team)}
+                      className="text-sm bg-gray-100 hover:bg-gray-200 p-1 rounded"
+                      title="Move to West"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              ))}
+              {eastTeams.length === 0 && (
+                <div className="p-4 text-center text-gray-500">
+                  No teams in East division
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        {/* West Division */}
+        <div>
+          <h3 className="font-medium mb-3 text-green-700">West Division</h3>
+          <div className="border rounded-lg overflow-hidden">
+            <div className="bg-green-50 p-3 border-b font-medium">
+              Teams: {westTeams.length}
+            </div>
+            <div className="divide-y max-h-96 overflow-y-auto">
+              {westTeams.map(team => (
+                <div 
+                  key={team.id}
+                  className="p-3 flex justify-between items-center hover:bg-gray-50"
+                >
+                  {user.role === 'parliamentarian' && (
+                    <button
+                      onClick={() => moveToEast(team)}
+                      className="text-sm bg-gray-100 hover:bg-gray-200 p-1 rounded"
+                      title="Move to East"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                      </svg>
+                    </button>
+                  )}
+                  <div className="flex items-center">
+                    <div className="w-8 h-8 flex items-center justify-center bg-green-100 rounded-full mr-3">
+                      {team.assignedSeed}
+                    </div>
+                    <div>
+                      <p className="font-medium">{team.name}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {westTeams.length === 0 && (
+                <div className="p-4 text-center text-gray-500">
+                  No teams in West division
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Save button (only for parliamentarians) */}
+      {user.role === 'parliamentarian' && (
+        <div className="mt-6 flex justify-end">
+          <button
+            onClick={saveAdjustments}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+          >
+            Save Division Adjustments
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default SeedingAdjustments;
