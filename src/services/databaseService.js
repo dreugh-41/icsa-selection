@@ -3,9 +3,28 @@ import { ref, set, get, onValue, update } from 'firebase/database';
 import { database } from '../firebase';
 
 // Save event state to Firebase
-export const saveEventState = (eventState) => {
-  return set(ref(database, 'eventState'), eventState);
-};
+export const saveEventState = async (eventState) => {
+    try {
+      // Add timestamp for tracking
+      const eventStateWithTimestamp = {
+        ...eventState,
+        lastSavedToFirebase: Date.now()
+      };
+      
+      console.log("Saving event state to Firebase...");
+      await set(ref(database, 'eventState'), eventStateWithTimestamp);
+      console.log("Successfully saved event state to Firebase");
+      return true;
+    } catch (error) {
+      console.error("Error saving event state to Firebase:", error);
+      
+      // Save to localStorage as backup
+      localStorage.setItem('sailing_nationals_event_state', JSON.stringify(eventState));
+      console.log("Saved to localStorage as backup");
+      
+      return false;
+    }
+  };
 
 // Get current event state from Firebase
 export const getEventState = async () => {

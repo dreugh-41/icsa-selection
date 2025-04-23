@@ -439,7 +439,8 @@ export function EventProvider({ children }) {
         remainingBerths: updatedRemainingBerths,
         teamsToQualifyThisRound: teamsToQualifyThisRound,
         rankingGroup: updatedRankingGroup,
-        alternateCount: updatedAlternateCount
+        alternateCount: updatedAlternateCount,
+        lastupdated: Date.now()
       };
     });
   };
