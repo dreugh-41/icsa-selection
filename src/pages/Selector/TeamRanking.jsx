@@ -1,5 +1,5 @@
 // src/pages/Selector/TeamRanking.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useEvent, EVENT_PHASES } from '../../contexts/EventContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { safeGet, safeArrayLength } from '../../utils/safeFetch';
@@ -26,6 +26,7 @@ function TeamRanking() {
     });
 
     const [searchTerm, setSearchTerm] = useState('');
+    const prevRound = useRef(eventState.currentRound);
 
     // Calculate which rank positions qualify, become alternates, or don't qualify
     const getTeamStatus = (rank) => {
@@ -131,6 +132,20 @@ function TeamRanking() {
           setUnrankedTeams([]);
         }
       }, [eventState.rankingGroup, rankedTeams, eventState.qualifiedTeams, eventState.pendingQualifiedTeams]);
+
+      useEffect(() => {
+        // Force a refresh if the component was already mounted but round changed
+        if (prevRound.current !== eventState.currentRound) {
+          console.log(`Round changed from ${prevRound.current} to ${eventState.currentRound} - resetting state`);
+          
+          // Reset rankings
+          setRankedTeams([]);
+          setIsSubmitted(false);
+          
+          // Update round reference
+          prevRound.current = eventState.currentRound;
+        }
+      }, [eventState.currentRound]);
     
     // Add this effect to update if user or round changes
     useEffect(() => {

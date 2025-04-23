@@ -1,5 +1,5 @@
 // src/pages/Selector/LeftoverVoting.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useEvent, EVENT_PHASES } from '../../contexts/EventContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { safeGet, safeArrayLength } from '../../utils/safeFetch';
@@ -23,6 +23,7 @@ function LeftoverVoting() {
     const [searchTerm, setSearchTerm] = useState('');
     const [nonRankedTeams, setNonRankedTeams] = useState([]);
     const [localRankingGroup, setLocalRankingGroup] = useState([]);
+    const prevRound = useRef(eventState.currentRound);
     
     // Add this effect to update if user or round changes
     useEffect(() => {
@@ -42,6 +43,20 @@ function LeftoverVoting() {
         setIsSubmitted(false);
       }
     }, [user, safeGet(eventState, 'currentRound', 1)]);
+
+    useEffect(() => {
+        // Force a refresh if the component was already mounted but round changed
+        if (prevRound.current !== eventState.currentRound) {
+          console.log(`Round changed from ${prevRound.current} to ${eventState.currentRound} - resetting state`);
+          
+          // Reset selections
+          setSelectedTeams(new Set());
+          setIsSubmitted(false);
+          
+          // Update round reference
+          prevRound.current = eventState.currentRound;
+        }
+      }, [eventState.currentRound]);
     
     // Create a local ranking group if one doesn't exist
     useEffect(() => {

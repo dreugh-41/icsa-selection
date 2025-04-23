@@ -192,6 +192,7 @@ export function EventProvider({ children }) {
           (prev.qualifiedTeams.length >= 36 || prev.remainingBerths === 0)) {
         console.log("All 36 teams qualified! Transitioning to alternate selection");
         nextPhase = EVENT_PHASES.ALTERNATE_LEFTOVER;
+        newRound = prev.currentRound + 1;
       }
       
       // Special case for tracking alternate rounds
@@ -213,7 +214,8 @@ export function EventProvider({ children }) {
       // Increment round when moving from finalized to leftover
       else if (prev.phase === EVENT_PHASES.ROUND1_FINALIZED || 
               (prev.phase === EVENT_PHASES.ROUND_FINALIZED && nextPhase === EVENT_PHASES.ROUND_LEFTOVER) ||
-              (prev.phase === EVENT_PHASES.ALTERNATE_FINALIZED && nextPhase === EVENT_PHASES.ALTERNATE_LEFTOVER)) {
+              (prev.phase === EVENT_PHASES.ALTERNATE_FINALIZED && nextPhase === EVENT_PHASES.ALTERNATE_LEFTOVER) ||
+              (prev.phase === EVENT_PHASES.ROUND_FINALIZED && nextPhase === EVENT_PHASES.ALTERNATE_LEFTOVER))  {
         newRound = prev.currentRound + 1;
       }
     

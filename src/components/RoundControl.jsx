@@ -92,43 +92,58 @@ function RoundControl() {
           const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
           const roundKey = `round${eventState.currentRound}_leftover`;
           
-          // Mark all selectors as having submitted leftover votes
-          const updatedUsers = users.map(user => {
-            if (user.role === 'selector') {
-              // Create or update voting history for leftover votes
-              const votingHistory = user.votingHistory || {};
-              votingHistory[roundKey] = votingHistory[roundKey] || {};
-              votingHistory[roundKey].submitted = true;
-              votingHistory[roundKey].timestamp = votingHistory[roundKey].timestamp || new Date().toISOString();
-              votingHistory[roundKey].votes = votingHistory[roundKey].votes || [];
-              
-              return {...user, votingHistory};
-            }
-            return user;
-          });
-          
-          // Save back to localStorage
-          localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
-          console.log(`Updated all selectors to show they've submitted leftover votes for round ${eventState.currentRound}`);
-          
-          // Also try to update Firebase
-          try {
-            updatedUsers.forEach(async (user) => {
-              if (user.role === 'selector' && user.id) {
-                const userRef = ref(database, `users/${user.id}`);
-                await update(userRef, { votingHistory: user.votingHistory });
+          // For alternate rounds, ensure we're not using old voting history
+          if (eventState.phase === EVENT_PHASES.ROUND_FINALIZED && 
+              (eventState.qualifiedTeams.length >= 36 || eventState.remainingBerths === 0)) {
+            console.log("Transitioning to alternate round - resetting voting history");
+            
+            // Force a round increment for checking
+            const nextRound = eventState.currentRound + 1;
+            const alternateRoundKey = `round${nextRound}_leftover`;
+            
+            // Reset all selectors' voting status for the next round
+            const updatedUsers = users.map(user => {
+              if (user.role === 'selector') {
+                const votingHistory = user.votingHistory || {};
+                // Clear any existing votes for the upcoming round
+                votingHistory[alternateRoundKey] = {
+                  submitted: false,
+                  votes: [],
+                  timestamp: null
+                };
+                
+                return {...user, votingHistory};
               }
+              return user;
             });
-          } catch (e) {
-            console.log("Couldn't update Firebase but localStorage was updated");
+            
+            // Save back to localStorage
+            localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
+            console.log(`Reset selector voting history for alternate round ${nextRound}`);
+            
+            // Also update Firebase
+            try {
+              updatedUsers.forEach(async (user) => {
+                if (user.role === 'selector' && user.id) {
+                  // Clear only the specific round's voting history
+                  const userVotingHistoryRef = ref(database, `users/${user.id}/votingHistory/${alternateRoundKey}`);
+                  await set(userVotingHistoryRef, {
+                    submitted: false,
+                    votes: [],
+                    timestamp: null
+                  });
+                }
+              });
+            } catch (e) {
+              console.log("Couldn't update Firebase but localStorage was updated");
+            }
           }
           
           return true;
         } catch (error) {
-          console.error("Error bypassing selector check for leftover votes:", error);
-          return false;
-        }
-      };
+            console.error("Error in bypassLeftoverCheck:", error);
+          }
+        };
       
       const bypassRankingCheck = () => {
         try {
