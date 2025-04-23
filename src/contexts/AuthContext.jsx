@@ -13,7 +13,7 @@ import {
   saveUserVotingHistory
 } from '../services/databaseService';
 import { ref, get, set } from 'firebase/database';
-import { database } from '../../firebase';
+import { database } from '../firebase';
 
 // Create the context
 const AuthContext = createContext(null);
