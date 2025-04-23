@@ -72,21 +72,34 @@ export function AuthProvider({ children }) {
   }, []);
 
   // This function will handle updating user data
-  const updateUser = (updatedUser) => {
-    // Update the user in state
-    setUser(updatedUser);
-    
-    // Update the users list
-    const updatedUsers = allUsers.map(u => 
-      u.id === updatedUser.id ? updatedUser : u
-    );
-    
-    // Save to Firebase
-    saveUsers(updatedUsers);
-    
-    // Save specific voting history updates
-    if (updatedUser.votingHistory) {
-      saveUserVotingHistory(updatedUser.id, updatedUser.votingHistory);
+  const updateUser = async (updatedUser) => {
+    try {
+      console.log("AuthContext: Updating user:", updatedUser);
+      
+      // Update the user in state
+      setUser(updatedUser);
+      
+      // Update the users list in local state
+      const updatedUsers = allUsers.map(u => 
+        u.id === updatedUser.id ? updatedUser : u
+      );
+      setAllUsers(updatedUsers);
+      
+      // Save to Firebase database
+      console.log("Saving updated users to Firebase");
+      await saveUsers(updatedUsers);
+      
+      // Explicitly save voting history to ensure it's updated
+      if (updatedUser.votingHistory) {
+        console.log("Saving voting history for user:", updatedUser.id);
+        await saveUserVotingHistory(updatedUser.id, updatedUser.votingHistory);
+      }
+      
+      console.log("User update completed successfully");
+      return true;
+    } catch (error) {
+      console.error("Error updating user:", error);
+      return false;
     }
   };
 

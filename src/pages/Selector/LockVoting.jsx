@@ -66,12 +66,16 @@ function LockVoting() {
     // Handle submission of lock votes
     const submitLockVotes = () => {
         try {
+            console.log("Submitting lock votes:", Array.from(selectedLocks));
+            
             // Prepare the voting data
             const votingData = {
                 lockVotes: Array.from(selectedLocks),
                 submitted: true,
                 timestamp: new Date().toISOString()
             };
+            
+            console.log("Created voting data:", votingData);
             
             // Update the user's voting history
             const updatedUser = {
@@ -82,7 +86,9 @@ function LockVoting() {
                 }
             };
             
-            // Save the updated user
+            console.log("Updating user with data:", updatedUser);
+            
+            // Save the updated user to Firebase
             updateUser(updatedUser);
             
             // Mark the form as submitted

@@ -22,9 +22,31 @@ export const onEventStateChange = (callback) => {
 };
 
 // Save a user's voting history
-export const saveUserVotingHistory = (userId, votingHistory) => {
-  return update(ref(database, `users/${userId}`), { votingHistory });
-};
+export const saveUserVotingHistory = async (userId, votingHistory) => {
+    try {
+      console.log(`Saving voting history for user ${userId}:`, votingHistory);
+      
+      // Update just the voting history for this user
+      const userRef = ref(database, `users/${userId}`);
+      await update(userRef, { votingHistory });
+      
+      // Also update in localStorage for backup and quicker access
+      const allUsers = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+      const updatedUsers = allUsers.map(u => {
+        if (u.id === userId) {
+          return { ...u, votingHistory };
+        }
+        return u;
+      });
+      localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
+      
+      console.log("Voting history saved successfully");
+      return true;
+    } catch (error) {
+      console.error("Error saving voting history:", error);
+      return false;
+    }
+  };
 
 // Get a user's voting history
 export const getUserVotingHistory = async (userId) => {
@@ -33,9 +55,31 @@ export const getUserVotingHistory = async (userId) => {
 };
 
 // Save all users data
-export const saveUsers = (users) => {
-  return set(ref(database, 'users'), users);
-};
+export const saveUsers = async (users) => {
+    try {
+      console.log("Saving all users to database");
+      
+      // Convert users array to object if necessary
+      const usersObject = Array.isArray(users) 
+        ? users.reduce((acc, user) => {
+            acc[user.id] = user;
+            return acc;
+          }, {})
+        : users;
+      
+      // Save to Firebase
+      await set(ref(database, 'users'), usersObject);
+      
+      // Also update localStorage
+      localStorage.setItem('sailing_nationals_users', JSON.stringify(Array.isArray(users) ? users : Object.values(usersObject)));
+      
+      console.log("Users saved successfully");
+      return true;
+    } catch (error) {
+      console.error("Error saving users:", error);
+      return false;
+    }
+  };
 
 // Get all users
 export const getUsers = async () => {

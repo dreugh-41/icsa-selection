@@ -7,82 +7,123 @@ function LockVoteMonitoring() {
     const { eventState, qualifyTeams } = useEvent();
     const { user } = useAuth();
     const [selectedTab, setSelectedTab] = useState('status'); // 'status' or 'results'
+    const [refreshKey, setRefreshKey] = useState(0); // Add a refresh key to force re-renders
     
     // In a real system, we would fetch this from the backend
     // For now, we'll get actual users from our auth system
     const [selectors, setSelectors] = useState([]);
     const [teamVotes, setTeamVotes] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    // Add a function to manually refresh data
+    const refreshData = () => {
+        setRefreshKey(prev => prev + 1);
+        loadData();
+    };
+
+    // Separated loading logic to a function for reuse
+    const loadData = () => {
+        try {
+            setLoading(true);
+            console.log("LockVoteMonitoring: Loading data from localStorage");
+            
+            // Load all users to check voting status
+            const allUsers = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+            console.log("Found users:", allUsers.length);
+            
+            const selectorUsers = allUsers.filter(u => u.role === 'selector');
+            console.log("Found selectors:", selectorUsers.length);
+            
+            // Get selector status with detailed logging
+            const selectorStatus = selectorUsers.map(selector => {
+                const hasVoted = safeGet(selector, 'votingHistory.round1.submitted', false);
+                const timestamp = safeGet(selector, 'votingHistory.round1.timestamp', null);
+                
+                console.log(`Selector ${selector.name}: voted=${hasVoted}, timestamp=${timestamp}`);
+                
+                return {
+                    id: selector.id,
+                    name: selector.name, 
+                    hasVoted,
+                    timestamp
+                };
+            });
+            
+            setSelectors(selectorStatus);
+            
+            // Count each team's votes with detailed logging
+            const voteCounts = {};
+            const votingSelectors = selectorUsers.filter(s => safeGet(s, 'votingHistory.round1.submitted', false)).length;
+            console.log("Selectors who voted:", votingSelectors);
+            
+            // If no one has voted yet, just show empty data
+            if (votingSelectors === 0) {
+                const emptyVotes = safeGet(eventState, 'teams', [])
+                    .filter(team => !safeGet(team, 'status.isQualified', false))
+                    .map(team => ({
+                        ...team,
+                        votePercentage: 0,
+                        qualifies: false
+                    }));
+                
+                setTeamVotes(emptyVotes);
+                setLoading(false);
+                return;
+            }
+            
+            // Initialize vote counts for all teams
+            safeGet(eventState, 'teams', []).forEach(team => {
+                voteCounts[team.id] = 0;
+            });
+            
+            // Count votes from each selector's voting history with detailed logging
+            selectorUsers.forEach(selector => {
+                const votes = safeGet(selector, 'votingHistory.round1.lockVotes', []);
+                console.log(`Selector ${selector.name}: ${votes.length} lock votes`);
+                
+                votes.forEach(teamId => {
+                    if (voteCounts[teamId] !== undefined) {
+                        voteCounts[teamId] += 1;
+                    }
+                });
+            });
+            
+            // Calculate percentages and qualifies status
+            const processedTeamVotes = safeGet(eventState, 'teams', [])
+                .filter(team => !safeGet(team, 'status.isQualified', false))
+                .map(team => {
+                    const voteCount = voteCounts[team.id] || 0;
+                    const votePercentage = votingSelectors > 0 
+                        ? Math.round((voteCount / votingSelectors) * 100)
+                        : 0;
+                    
+                    return {
+                        ...team,
+                        votePercentage,
+                        qualifies: votePercentage >= 60 // 60% threshold
+                    };
+                });
+            
+            setTeamVotes(processedTeamVotes);
+            setLoading(false);
+            
+            console.log("Data loading complete");
+        } catch (error) {
+            console.error("Error loading vote data:", error);
+            setLoading(false);
+        }
+    };
 
     // Use useEffect to load data
     useEffect(() => {
-        // Load all users to check voting status
-        const allUsers = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
-        const selectorUsers = allUsers.filter(u => u.role === 'selector');
-        
-        // Get selector status
-        const selectorStatus = selectorUsers.map(selector => {
-          const hasVoted = selector.votingHistory?.round1?.submitted || false;
-          const timestamp = selector.votingHistory?.round1?.timestamp || null;
-          
-          return {
-            id: selector.id,
-            name: selector.name, 
-            hasVoted,
-            timestamp
-          };
-        });
-        
-        setSelectors(selectorStatus);
-        
-        // Count each team's votes
-        const voteCounts = {};
-        const votingSelectors = selectorUsers.filter(s => s.votingHistory?.round1?.submitted).length;
-        
-        // If no one has voted yet, just show empty data
-        if (votingSelectors === 0) {
-          const emptyVotes = eventState.teams
-            .filter(team => !team.status?.isQualified)
-            .map(team => ({
-              ...team,
-              votePercentage: 0,
-              qualifies: false
-            }));
-          
-          setTeamVotes(emptyVotes);
-          return;
-        }
-        
-        // Initialize vote counts for all teams
-        eventState.teams.forEach(team => {
-          voteCounts[team.id] = 0;
-        });
-        
-        // Count votes from each selector's voting history
-        selectorUsers.forEach(selector => {
-          const votes = selector.votingHistory?.round1?.lockVotes || [];
-          votes.forEach(teamId => {
-            if (voteCounts[teamId] !== undefined) {
-              voteCounts[teamId] += 1;
-            }
-          });
-        });
-        
-        // Calculate percentages and qualifies status
-        const processedTeamVotes = eventState.teams
-          .filter(team => !team.status?.isQualified)
-          .map(team => {
-            const voteCount = voteCounts[team.id] || 0;
-            const votePercentage = Math.round((voteCount / votingSelectors) * 100);
-            
-            return {
-              ...team,
-              votePercentage,
-              qualifies: votePercentage >= 60 // 60% threshold
-            };
-          });
-        
-        setTeamVotes(processedTeamVotes);
-      }, [eventState.teams]);
+        loadData();
+    }, [eventState.teams, refreshKey]);
+    
+    // Add periodic automatic refresh for real-time updates
+    useEffect(() => {
+        const refreshInterval = setInterval(refreshData, 30000); // Refresh every 30 seconds
+        return () => clearInterval(refreshInterval);
+    }, []);
     
     // Teams that should be added to ranking group (60% or more votes)
     const qualifyingTeams = teamVotes.filter(team => team.qualifies);
@@ -117,31 +158,54 @@ function LockVoteMonitoring() {
         <div className="bg-white p-6 rounded-lg shadow-sm">
             <h2 className="text-xl font-semibold mb-4">Lock Vote Monitoring</h2>
             
-            {/* Tab Navigation */}
-            <div className="border-b mb-6">
-                <nav className="flex -mb-px">
-                    <button
-                        onClick={() => setSelectedTab('status')}
-                        className={`mr-4 py-2 px-4 font-medium ${
-                            selectedTab === 'status'
-                            ? 'border-b-2 border-blue-500 text-blue-600'
-                            : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                    >
-                        Selector Status
-                    </button>
-                    <button
-                        onClick={() => setSelectedTab('results')}
-                        className={`py-2 px-4 font-medium ${
-                            selectedTab === 'results'
-                            ? 'border-b-2 border-blue-500 text-blue-600'
-                            : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                    >
-                        Voting Results
-                    </button>
-                </nav>
+            {/* Add a refresh button */}
+            <div className="mb-4 flex justify-end">
+                <button 
+                    onClick={refreshData}
+                    className="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-lg text-gray-700 flex items-center"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
+                        <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                    </svg>
+                    Refresh Data
+                </button>
             </div>
+            
+            {/* Show loading state */}
+            {loading ? (
+                <div className="flex justify-center items-center h-40">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto"></div>
+                        <p className="mt-2 text-gray-600">Loading vote data...</p>
+                    </div>
+                </div>
+            ) : (
+                /* Tab Navigation */
+                <>
+                    <div className="border-b mb-6">
+                        <nav className="flex -mb-px">
+                            <button
+                                onClick={() => setSelectedTab('status')}
+                                className={`mr-4 py-2 px-4 font-medium ${
+                                    selectedTab === 'status'
+                                    ? 'border-b-2 border-blue-500 text-blue-600'
+                                    : 'text-gray-500 hover:text-gray-700'
+                                }`}
+                            >
+                                Selector Status
+                            </button>
+                            <button
+                                onClick={() => setSelectedTab('results')}
+                                className={`py-2 px-4 font-medium ${
+                                    selectedTab === 'results'
+                                    ? 'border-b-2 border-blue-500 text-blue-600'
+                                    : 'text-gray-500 hover:text-gray-700'
+                                }`}
+                            >
+                                Voting Results
+                            </button>
+                        </nav>
+                    </div>
             
             {/* Tab Content */}
             {selectedTab === 'status' ? (
