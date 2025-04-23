@@ -156,18 +156,40 @@ function LockVoteMonitoring() {
       };
 
     // Separated loading logic to a function for reuse
-    const loadData = () => {
+    const loadData = async () => {
         try {
           setLoading(true);
-          console.log("LockVoteMonitoring: Loading data from localStorage");
+          console.log("LockVoteMonitoring: Loading data from Firebase and localStorage");
           
-          // Load all users to check voting status
-          const allUsers = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
-          console.log("Found users:", allUsers.length);
+          // Try to get users from Firebase first
+          let selectorUsers = [];
+          try {
+            const usersSnapshot = await get(ref(database, 'users'));
+            if (usersSnapshot.exists()) {
+              const usersData = usersSnapshot.val();
+              console.log("Firebase users data:", usersData);
+              
+              // Convert object to array and filter for selectors
+              selectorUsers = Object.values(usersData)
+                .filter(u => u && u.role === 'selector' && u.isActive !== false);
+              
+              console.log("Found selectors in Firebase:", selectorUsers.length);
+            } else {
+              console.log("No users found in Firebase");
+            }
+          } catch (firebaseError) {
+            console.error("Error reading from Firebase:", firebaseError);
+            // Continue with localStorage data
+          }
           
-          // Only include active selectors
-          const selectorUsers = allUsers.filter(u => u && u.role === 'selector' && u.isActive !== false);
-          console.log("Found active selectors:", selectorUsers.length);
+          // If we didn't get selectors from Firebase, use localStorage as backup
+          if (selectorUsers.length === 0) {
+            console.log("Using localStorage for selector data");
+            const allUsers = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+            selectorUsers = allUsers.filter(u => u && u.role === 'selector' && u.isActive !== false);
+          }
+          
+          console.log("All selector users:", selectorUsers);
           
           // Create a detailed list of selectors and their voting status
           const selectorDetails = selectorUsers.map(selector => {
@@ -177,11 +199,11 @@ function LockVoteMonitoring() {
             const voteCount = selector?.votingHistory?.round1?.lockVotes?.length || 0;
             const timestamp = selector?.votingHistory?.round1?.timestamp || null;
             
-            console.log(`Selector ${selector.name}: hasRound1=${hasRound1}, submitted=${isSubmitted}, votes=${voteCount}`);
+            console.log(`Selector ${selector.name || 'Unknown'}: hasRound1=${hasRound1}, submitted=${isSubmitted}, votes=${voteCount}`);
             
             return {
               id: selector.id,
-              name: selector.name,
+              name: selector.name || 'Unknown',
               hasVoted: isSubmitted, // Explicitly check for true
               timestamp,
               voteCount
@@ -251,12 +273,12 @@ function LockVoteMonitoring() {
           setTeamVotes(processedTeamVotes);
           setLoading(false);
           
-          console.log("Data loading complete");
-        } catch (error) {
-          console.error("Error loading vote data:", error);
           setLoading(false);
+        } catch (error) {
+            console.error("Error loading vote data:", error);
+            setLoading(false);
         }
-      };
+        };
       
 
     // Use useEffect to load data
