@@ -180,8 +180,8 @@ function LockVoteMonitoring() {
                     </div>
                 </div>
             ) : (
-                /* Tab Navigation */
-                <>
+                /* Tab Navigation and Content */
+                <div>
                     <div className="border-b mb-6">
                         <nav className="flex -mb-px">
                             <button
@@ -206,149 +206,151 @@ function LockVoteMonitoring() {
                             </button>
                         </nav>
                     </div>
-            
-            {/* Tab Content */}
-            {selectedTab === 'status' ? (
-                /* Selector Status Tab */
-                <div>
-                    <div className="mb-4 bg-blue-50 p-4 rounded-lg flex items-center justify-between">
+                    
+                    {/* Tab Content */}
+                    {selectedTab === 'status' ? (
+                        /* Selector Status Tab */
                         <div>
-                            <p className="font-medium">Selector Voting Progress</p>
-                            <p className="text-sm text-gray-600">
-                                {selectors.filter(s => s.hasVoted).length} of {selectors.length} selectors have submitted their votes
-                            </p>
+                            <div className="mb-4 bg-blue-50 p-4 rounded-lg flex items-center justify-between">
+                                <div>
+                                    <p className="font-medium">Selector Voting Progress</p>
+                                    <p className="text-sm text-gray-600">
+                                        {selectors.filter(s => s.hasVoted).length} of {selectors.length} selectors have submitted their votes
+                                    </p>
+                                </div>
+                                <div className="text-xl font-bold text-blue-600">
+                                    {selectors.length > 0 ? 
+                                        Math.round((selectors.filter(s => s.hasVoted).length / selectors.length) * 100) :
+                                        0}%
+                                </div>
+                            </div>
+                            
+                            <div className="border rounded-lg overflow-hidden">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Selector Name
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Status
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Timestamp
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {selectors.map(selector => (
+                                            <tr key={selector.id}>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="font-medium text-gray-900">{selector.name}</div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    {selector.hasVoted ? (
+                                                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                                            Voted
+                                                        </span>
+                                                    ) : (
+                                                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                                                            Pending
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                    {selector.timestamp || '—'}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
-                        <div className="text-xl font-bold text-blue-600">
-                            {selectors.length > 0 ? 
-                                Math.round((selectors.filter(s => s.hasVoted).length / selectors.length) * 100) :
-                                0}%
-                        </div>
-                    </div>
-                    
-                    <div className="border rounded-lg overflow-hidden">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Selector Name
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Status
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Timestamp
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {selectors.map(selector => (
-                                    <tr key={selector.id}>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="font-medium text-gray-900">{selector.name}</div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            {selector.hasVoted ? (
-                                                <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                                                    Voted
-                                                </span>
-                                            ) : (
-                                                <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
-                                                    Pending
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {selector.timestamp || '—'}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            ) : (
-                /* Voting Results Tab */
-                <div>
-                    <div className="mb-4 bg-green-50 p-4 rounded-lg">
-                        <p className="font-medium">Qualifying Teams ({qualifyingTeams.length})</p>
-                        <p className="text-sm text-gray-600">
-                            Teams receiving votes from 60% or more of selectors qualify automatically
-                        </p>
-                    </div>
-                    
-                    <div className="border rounded-lg overflow-hidden mb-6">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Team Name
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Vote Percentage
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Status
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {sortedTeamVotes
-                                    .filter(team => team.votePercentage > 0) // Only show teams with votes
-                                    .map(team => (
-                                    <tr 
-                                        key={team.id}
-                                        className={team.qualifies ? 'bg-green-50' : ''}
+                    ) : (
+                        /* Voting Results Tab */
+                        <div>
+                            <div className="mb-4 bg-green-50 p-4 rounded-lg">
+                                <p className="font-medium">Qualifying Teams ({qualifyingTeams.length})</p>
+                                <p className="text-sm text-gray-600">
+                                    Teams receiving votes from 60% or more of selectors qualify automatically
+                                </p>
+                            </div>
+                            
+                            <div className="border rounded-lg overflow-hidden mb-6">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Team Name
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Vote Percentage
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Status
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {sortedTeamVotes
+                                            .filter(team => team.votePercentage > 0) // Only show teams with votes
+                                            .map(team => (
+                                            <tr 
+                                                key={team.id}
+                                                className={team.qualifies ? 'bg-green-50' : ''}
+                                            >
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="font-medium text-gray-900">{team.name}</div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="w-full bg-gray-200 rounded-full h-2.5">
+                                                        <div 
+                                                            className={`h-2.5 rounded-full ${
+                                                                team.qualifies ? 'bg-green-600' : 'bg-blue-600'
+                                                            }`}
+                                                            style={{ width: `${team.votePercentage}%` }}
+                                                        ></div>
+                                                    </div>
+                                                    <span className="text-xs text-gray-600 mt-1 block">
+                                                        {team.votePercentage}%
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    {team.qualifies ? (
+                                                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                                            Qualifies
+                                                        </span>
+                                                    ) : (
+                                                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                                                            Does Not Qualify
+                                                        </span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        
+                                        {sortedTeamVotes.filter(team => team.votePercentage > 0).length === 0 && (
+                                            <tr>
+                                                <td colSpan="3" className="px-6 py-4 text-center text-gray-500">
+                                                    No teams have received votes yet
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            {/* Qualify Teams Button */}
+                            {qualifyingTeams.length > 0 && (
+                                <div className="flex justify-end">
+                                    <button
+                                        onClick={finalizeQualifiedTeams}
+                                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
                                     >
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="font-medium text-gray-900">{team.name}</div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="w-full bg-gray-200 rounded-full h-2.5">
-                                                <div 
-                                                    className={`h-2.5 rounded-full ${
-                                                        team.qualifies ? 'bg-green-600' : 'bg-blue-600'
-                                                    }`}
-                                                    style={{ width: `${team.votePercentage}%` }}
-                                                ></div>
-                                            </div>
-                                            <span className="text-xs text-gray-600 mt-1 block">
-                                                {team.votePercentage}%
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            {team.qualifies ? (
-                                                <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                                                    Qualifies
-                                                </span>
-                                            ) : (
-                                                <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
-                                                    Does Not Qualify
-                                                </span>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                                
-                                {sortedTeamVotes.filter(team => team.votePercentage > 0).length === 0 && (
-                                    <tr>
-                                        <td colSpan="3" className="px-6 py-4 text-center text-gray-500">
-                                            No teams have received votes yet
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                    
-                    {/* Qualify Teams Button */}
-                    {qualifyingTeams.length > 0 && (
-                        <div className="flex justify-end">
-                            <button
-                                onClick={finalizeQualifiedTeams}
-                                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                            >
-                                Finalize Qualifying Teams
-                            </button>
+                                        Finalize Qualifying Teams
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
