@@ -383,6 +383,7 @@ function RoundControl() {
                         // Check if the leftover voting phase has been completed properly
                         if (eventState.phase === EVENT_PHASES.ROUND_LEFTOVER) {
                             bypassLeftoverCheck();
+                            bypassSelectorCheck()
                             // Get all selectors and their voting status
                             const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
                             const selectorUsers = users.filter(u => u.role === 'selector');
