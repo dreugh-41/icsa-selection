@@ -330,11 +330,17 @@ function RoundControl() {
                                 
                             alert('Please finalize AQ selections before advancing to the next phase.');
                             return;
+                        } else if (eventState.phase === EVENT_PHASES.ROUND1_FINALIZED ||
+                                    eventState.phase === EVENT_PHASES.ROUND_FINALIZED) {
+                            // When transitioning to leftover voting, call bypassLeftoverCheck
+                            bypassLeftoverCheck();
+                        } else {
+                            // For other transitions, use the regular selector check
+                            bypassSelectorCheck();
                         }
                         
                         // Check if there are pending lock votes that need to be finalized
                             if (eventState.phase === EVENT_PHASES.ROUND1_LOCK) {
-                                bypassSelectorCheck()
                                 // First check if all selectors have submitted their votes
                                 const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
                                 const selectorUsers = users.filter(u => u.role === 'selector');
@@ -387,8 +393,6 @@ function RoundControl() {
                         
                         // Check if the leftover voting phase has been completed properly
                         if (eventState.phase === EVENT_PHASES.ROUND_LEFTOVER) {
-                            bypassLeftoverCheck();
-                            bypassSelectorCheck()
                             // Get all selectors and their voting status
                             const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
                             const selectorUsers = users.filter(u => u.role === 'selector');
