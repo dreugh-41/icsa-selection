@@ -300,61 +300,39 @@ function LockVoteMonitoring() {
     
     // Handle adding teams to ranking group
     const finalizeQualifiedTeams = () => {
-        // First log what we're checking
-        console.log("Checking selector votes");
+        console.log("Attempting to finalize qualified teams");
         console.log("Current selectors state:", selectors);
+        console.log("Qualifying teams:", qualifyingTeams);
         
-        // Get a fresh copy of selector data directly from localStorage
-        const allUsers = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
-        const activeSelectorUsers = allUsers.filter(u => u.role === 'selector' && u.isActive !== false);
-        
-        console.log("Active selectors from localStorage:", activeSelectorUsers.length);
-        
-        // Count how many have actually submitted votes
-        const selectorsWithVotes = activeSelectorUsers.filter(
-          s => s?.votingHistory?.round1?.submitted === true
-        );
-        
-        console.log("Selectors with submitted votes:", selectorsWithVotes.length);
-        console.log("Selector voting details:", selectorsWithVotes.map(s => ({
-          name: s.name,
-          submitted: s?.votingHistory?.round1?.submitted,
-          votes: s?.votingHistory?.round1?.lockVotes?.length || 0
-        })));
-        
-        // Check if we have at least some votes (instead of requiring all selectors)
-        if (selectorsWithVotes.length === 0) {
-          alert('No selectors have submitted votes yet. Please wait for at least one selector to vote before proceeding.');
-          return;
-        }
-        
-        // If there are no teams that qualify, inform the user
+        // Skip the selector vote check entirely - just focus on the teams
         if (qualifyingTeams.length === 0) {
-          alert('No teams have received enough votes to qualify automatically (60% threshold). You can still proceed to the next phase.');
+          // If no teams qualify, show a warning but allow proceeding
+          if (window.confirm('No teams have received enough votes to qualify (60% threshold). Do you still want to proceed without qualifying any teams?')) {
+            // Just return without qualifying any teams
+            return;
+          }
           return;
         }
         
-        if (window.confirm(`Are you sure you want to qualify ${qualifyingTeams.length} teams based on lock votes from ${selectorsWithVotes.length} selectors?`)) {
-          // Convert qualifying teams to the right format for our state system
-          const teamsToQualify = qualifyingTeams.map(team => {
-            const originalTeam = eventState.teams.find(t => t.id === team.id);
-            return {
-              ...originalTeam,
-              status: {
-                ...originalTeam.status,
-                isLocked: true,
-                isQualified: true,
-                qualificationMethod: 'LOCK',
-                qualificationRound: eventState.currentRound
-              }
-            };
-          });
-          
-          // Update our state with the newly qualified teams (as pending)
-          qualifyTeams(teamsToQualify);
-          
-          alert(`${teamsToQualify.length} teams have been qualified through lock voting! They will be officially qualified when the round is finalized.`);
-        }
+        // Convert qualifying teams to the right format for our state system
+        const teamsToQualify = qualifyingTeams.map(team => {
+          const originalTeam = eventState.teams.find(t => t.id === team.id);
+          return {
+            ...originalTeam,
+            status: {
+              ...originalTeam.status,
+              isLocked: true,
+              isQualified: true,
+              qualificationMethod: 'LOCK',
+              qualificationRound: eventState.currentRound
+            }
+          };
+        });
+        
+        // Update our state with the newly qualified teams (as pending)
+        qualifyTeams(teamsToQualify);
+        
+        alert(`${teamsToQualify.length} teams have been qualified through lock voting! They will be officially qualified when the round is finalized.`);
       };
     
     // Sort by vote percentage (highest first)
