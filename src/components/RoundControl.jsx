@@ -353,42 +353,37 @@ function RoundControl() {
                         const btn = event.currentTarget;
                         btn.disabled = true;
                         btn.classList.add('opacity-50', 'cursor-not-allowed');
-                        //bypassSelectorCheck();
+                        
+                        // IMPORTANT: Remove the automatic bypass calls here
+                        // ONLY call bypass functions when explicitly needed
+                        
                         // Check if teams have been uploaded before starting the process
                         if (eventState.phase === EVENT_PHASES.PRESELECTION && 
                             (!eventState.teams || eventState.teams.length === 0)) {
                             alert('Please import team data from the CSR file before starting the selection process.');
                             return;
                         }
-
+                    
                         // Check if there are pending qualifications that need to be finalized
                         if (eventState.phase === EVENT_PHASES.ROUND1_AQ && 
                             !eventState.pendingQualifiedTeams?.some(team => team.status?.qualificationMethod === 'AQ')) {
-                                
                             alert('Please finalize AQ selections before advancing to the next phase.');
                             return;
-                        } else if (eventState.phase === EVENT_PHASES.ROUND1_FINALIZED ||
-                                    eventState.phase === EVENT_PHASES.ROUND_FINALIZED) {
-                            // When transitioning to leftover voting, call bypassLeftoverCheck
-                            bypassLeftoverCheck();
-                        } else {
-                            // For other transitions, use the regular selector check
-                            bypassSelectorCheck();
                         }
                         
                         // Check if there are pending lock votes that need to be finalized
-                            if (eventState.phase === EVENT_PHASES.ROUND1_LOCK) {
-                                // First check if all selectors have submitted their votes
-                                const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
-                                const selectorUsers = users.filter(u => u.role === 'selector');
-                                
-                                // Check if all selectors have submitted lock votes
-                                const allSelectorsVoted = selectorUsers.every(s => s.votingHistory?.round1?.submitted);
-                                
-                                if (!allSelectorsVoted) {
-                                    alert('Not all selectors have submitted their lock votes yet. Please wait for all votes before advancing.');
-                                    return;
-                                }
+                        if (eventState.phase === EVENT_PHASES.ROUND1_LOCK) {
+                            // First check if all selectors have submitted their votes
+                            const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+                            const selectorUsers = users.filter(u => u.role === 'selector');
+                            
+                            // Check if all selectors have submitted lock votes
+                            const allSelectorsVoted = selectorUsers.every(s => s.votingHistory?.round1?.submitted);
+                            
+                            if (!allSelectorsVoted) {
+                                alert('Not all selectors have submitted their lock votes yet. Please wait for all votes before advancing.');
+                                return;
+                            }
                                 
                                 // If there are teams that got enough lock votes, they should be added to pending qualified
                                 const votingSelectors = selectorUsers.filter(s => s.votingHistory?.round1?.submitted).length;
@@ -430,6 +425,9 @@ function RoundControl() {
                         
                         // Check if the leftover voting phase has been completed properly
                         if (eventState.phase === EVENT_PHASES.ROUND_LEFTOVER) {
+                            // REMOVE the automatic bypass call here
+                            // bypassLeftoverCheck();
+                            
                             // Get all selectors and their voting status
                             const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
                             const selectorUsers = users.filter(u => u.role === 'selector');
@@ -505,17 +503,60 @@ function RoundControl() {
                             }
                         }
                         
-                        // If all checks pass, advance to the next phase
-                        advancePhase();
-    
-                        // Add a message and force reload
-                        alert("Phase advanced successfully! The page will now refresh.");
-                        
-                        // Force reload after a delay
-                        setTimeout(() => {
-                        window.location.reload();
-                        }, 1000);
-                    }}
+                        if ((eventState.phase === EVENT_PHASES.ROUND1_FINALIZED && 
+                            eventState.currentRound < 2) || 
+                           (eventState.phase === EVENT_PHASES.ROUND_FINALIZED)) {
+                           
+                           // Initialize the next round's voting structure (empty, not submitted)
+                           const nextRound = eventState.currentRound + 1;
+                           const nextRoundKey = `round${nextRound}_leftover`;
+                           
+                           const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+                           
+                           // Reset each selector's voting for the new round
+                           const updatedUsers = users.map(user => {
+                               if (user.role === 'selector') {
+                                   const votingHistory = {...(user.votingHistory || {})};
+                                   
+                                   // Initialize empty voting record for next round
+                                   votingHistory[nextRoundKey] = {
+                                       submitted: false, // Important: Not submitted yet
+                                       votes: [],
+                                       timestamp: null
+                                   };
+                                   
+                                   return {...user, votingHistory};
+                               }
+                               return user;
+                           });
+                           
+                           // Save to localStorage
+                           localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
+                           
+                           // Update Firebase with the new voting structure
+                           updatedUsers.forEach(async (user) => {
+                               if (user.role === 'selector' && user.id) {
+                                   const votingHistoryRef = ref(database, `users/${user.id}/votingHistory/${nextRoundKey}`);
+                                   await set(votingHistoryRef, {
+                                       submitted: false,
+                                       votes: [],
+                                       timestamp: null
+                                   });
+                               }
+                           });
+                       }
+                       
+                       // If all checks pass, advance to the next phase
+                       advancePhase();
+                   
+                       // Add a message and force reload
+                       alert("Phase advanced successfully! The page will now refresh.");
+                       
+                       // Force reload after a delay
+                       setTimeout(() => {
+                       window.location.reload();
+                       }, 1000);
+                   }}
                     className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
                     >
                     {getNextPhaseDisplay()}
