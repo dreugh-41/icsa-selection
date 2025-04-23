@@ -6,27 +6,45 @@ function ResetProcess() {
   const { resetEventState } = useEvent();
   const [showConfirmation, setShowConfirmation] = useState(false);
   
-  const handleReset = () => {
-    // First, clear all selector voting history
-    const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
-    
-    // Reset voting history for all selectors
-    const updatedUsers = users.map(user => {
-      if (user.role === 'selector') {
-        return {
-          ...user,
-          votingHistory: {} // Clear all voting history
-        };
+  const handleReset = async () => {
+    try {
+      console.log("Reset process initiated");
+      
+      // First, clear all selector voting history
+      const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+      
+      // Reset voting history for all selectors
+      const updatedUsers = users.map(user => {
+        if (user.role === 'selector') {
+          return {
+            ...user,
+            votingHistory: {} // Clear all voting history
+          };
+        }
+        return user;
+      });
+      
+      // Save the updated users back to localStorage
+      localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
+      
+      // Now reset the event state
+      const success = await resetEventState();
+      
+      if (success) {
+        console.log("Reset completed successfully");
+        // Force browser refresh to ensure reset takes effect
+        window.location.reload();
+      } else {
+        console.error("Reset returned failure");
+        alert("Reset process failed. Please try again.");
       }
-      return user;
-    });
-    
-    // Save the updated users back to localStorage
-    localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
-    
-    // Now reset the event state
-    resetEventState();
-    setShowConfirmation(false);
+      
+      setShowConfirmation(false);
+    } catch (error) {
+      console.error("Error in reset process:", error);
+      alert("An error occurred during reset: " + error.message);
+      setShowConfirmation(false);
+    }
   };
 
   return (
