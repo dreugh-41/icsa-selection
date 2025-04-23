@@ -26,17 +26,20 @@ export const saveUserVotingHistory = async (userId, votingHistory) => {
     try {
       console.log(`Saving voting history for user ${userId}:`, votingHistory);
       
-      // Try Firebase first, but continue even if it fails
+      // Update Firebase
       try {
+        // First get the user ref
         const userRef = ref(database, `users/${userId}`);
+        
+        // Then update only the votingHistory property
         await update(userRef, { votingHistory });
-        console.log("Voting history saved to Firebase successfully");
+        console.log("Successfully saved voting history to Firebase");
       } catch (firebaseError) {
-        console.warn("Could not save to Firebase, continuing with localStorage only:", firebaseError.message);
-        // Continue anyway using localStorage as backup
+        console.error("Firebase write error:", firebaseError);
+        // Continue to save in localStorage even if Firebase fails
       }
       
-      // Always update localStorage
+      // Update localStorage as well for redundancy
       const allUsers = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
       const updatedUsers = allUsers.map(u => {
         if (u.id === userId) {
@@ -46,7 +49,6 @@ export const saveUserVotingHistory = async (userId, votingHistory) => {
       });
       localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
       
-      console.log("Voting history saved successfully to localStorage");
       return true;
     } catch (error) {
       console.error("Error saving voting history:", error);

@@ -15,7 +15,6 @@ import CompletionSummary from '../../components/CompletionSummary';
 import ProcessSelection from '../../components/parliamentarian/ProcessSelection';
 import SeedingAdjustments from '../../components/parliamentarian/SeedingAdjustments';
 import { safeGet, safeArrayLength } from '../../utils/safeFetch';
-import FirebaseDebugger from '../components/debug/FirebaseDebugger';
 
 function ParliamentarianDashboard() {
   const { eventState, loading } = useEvent();
@@ -51,6 +50,38 @@ function ParliamentarianDashboard() {
       </div>
     );
   }
+
+  const [debugInfo, setDebugInfo] = useState({
+    localStorageUsers: [],
+    selectorsWithVotes: 0,
+    lastRefresh: new Date().toLocaleTimeString()
+  });
+
+  const loadData = () => {
+    try {
+      setLoading(true);
+      console.log("LockVoteMonitoring: Loading data from localStorage");
+      
+      // Load all users to check voting status
+      const allUsers = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+      console.log("Found users:", allUsers.length);
+      
+      const selectorUsers = allUsers.filter(u => u && u.role === 'selector');
+      console.log("Found selectors:", selectorUsers.length);
+      
+      // Update debug info
+      setDebugInfo({
+        localStorageUsers: allUsers.length,
+        selectorsWithVotes: selectorUsers.filter(s => s?.votingHistory?.round1?.submitted).length,
+        lastRefresh: new Date().toLocaleTimeString()
+      });
+      
+      // Rest of your existing loadData function...
+    } catch (error) {
+      console.error("Error loading vote data:", error);
+      setLoading(false);
+    }
+  };
 
     // Helper function to determine what component to show based on the current phase
     const renderPhaseComponent = () => {
