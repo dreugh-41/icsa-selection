@@ -1,6 +1,10 @@
 // src/utils/safeFetch.js
 export const safeGet = (obj, path, defaultValue = null) => {
     try {
+      if (obj === null || obj === undefined) {
+        return defaultValue;
+      }
+      
       const keys = path.split('.');
       let result = obj;
       

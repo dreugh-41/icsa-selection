@@ -98,7 +98,12 @@ export function EventProvider({ children }) {
       console.log("Saving event state to Firebase with ranking group size:", eventState.rankingGroup?.length || 0);
       saveEventState(eventState).catch(err => {
         console.error('Error saving event state:', err);
+        // Still save to localStorage as a fallback
+        localStorage.setItem('sailing_nationals_event_state', JSON.stringify(eventState));
       });
+      
+      // Always save to localStorage regardless of Firebase success
+      localStorage.setItem('sailing_nationals_event_state', JSON.stringify(eventState));
     }
   }, [eventState, loading]);
 
@@ -114,61 +119,32 @@ export function EventProvider({ children }) {
   };
 
   // 2. resetEventState function
-  const resetEventState = async () => {
-    try {
-      console.log("Resetting event state completely");
-      
-      // Set to initial state
-      const initialState = {
-        phase: EVENT_PHASES.PRESELECTION,
-        currentRound: 0,
-        qualifiedTeams: [],
-        pendingQualifiedTeams: [],
-        remainingBerths: 36,
-        teams: [],
-        rankingGroup: [],
-        roundHistory: {},
-        selectionType: null,
-        alternateCount: 0,
-        teamsToQualifyThisRound: null
-      };
-      
-      // Update state
-      setEventState(initialState);
-      
-      // Clear localStorage backup if you're using it
-      localStorage.removeItem('sailing_nationals_event_state');
-      
-      // Also clear any selector voting history
-      const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
-      const updatedUsers = users.map(user => {
-        if (user.role === 'selector') {
-          return {
-            ...user,
-            votingHistory: {} // Clear all voting history
-          };
-        }
-        return user;
-      });
-      
-      // Save updated users to localStorage and Firebase
-      localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
-      await saveUsers(updatedUsers);
-      
-      // Save reset state to Firebase
-      await saveEventState(initialState);
-      
-      console.log("Event state reset complete");
-      
-      // Optional: Add a successful reset notification
-      alert("The selection process has been fully reset.");
-      
-      return true;
-    } catch (error) {
-      console.error("Error resetting event state:", error);
-      alert("An error occurred while resetting the process. Please try again.");
-      return false;
-    }
+  const resetEventState = () => {
+    console.log("Resetting event state completely");
+    
+    // Set to initial state
+    const initialState = {
+      phase: EVENT_PHASES.PRESELECTION,
+      currentRound: 0,
+      qualifiedTeams: [],
+      pendingQualifiedTeams: [],
+      remainingBerths: 36,
+      teams: [],
+      rankingGroup: [],
+      roundHistory: {},
+      selectionType: null,
+      alternateCount: 0,
+      teamsToQualifyThisRound: null
+    };
+    
+    // Update local state
+    setEventState(initialState);
+    
+    // Clear localStorage
+    localStorage.removeItem('sailing_nationals_event_state');
+    
+    console.log("Event state reset complete");
+    return true;
   };
 
   // 3. setEventTeams function

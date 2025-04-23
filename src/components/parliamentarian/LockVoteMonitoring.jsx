@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useEvent } from '../../contexts/EventContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { safeGet, safeArrayLength } from '../../utils/safeFetch';
 
 function LockVoteMonitoring() {
     const { eventState, qualifyTeams } = useEvent();

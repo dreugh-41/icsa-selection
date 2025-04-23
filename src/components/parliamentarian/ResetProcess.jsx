@@ -6,11 +6,11 @@ function ResetProcess() {
   const { resetEventState } = useEvent();
   const [showConfirmation, setShowConfirmation] = useState(false);
   
-  const handleReset = async () => {
+  const handleReset = () => {
     try {
       console.log("Reset process initiated");
       
-      // First, clear all selector voting history
+      // First, clear all selector voting history from localStorage
       const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
       
       // Reset voting history for all selectors
@@ -27,17 +27,16 @@ function ResetProcess() {
       // Save the updated users back to localStorage
       localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
       
-      // Now reset the event state
-      const success = await resetEventState();
+      // Clear any existing event state in localStorage
+      localStorage.removeItem('sailing_nationals_event_state');
       
-      if (success) {
-        console.log("Reset completed successfully");
-        // Force browser refresh to ensure reset takes effect
+      // Now reset the event state
+      resetEventState();
+      
+      // Force page reload after a brief delay
+      setTimeout(() => {
         window.location.reload();
-      } else {
-        console.error("Reset returned failure");
-        alert("Reset process failed. Please try again.");
-      }
+      }, 500);
       
       setShowConfirmation(false);
     } catch (error) {
