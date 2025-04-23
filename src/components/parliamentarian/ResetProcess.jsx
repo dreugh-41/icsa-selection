@@ -9,41 +9,37 @@ function ResetProcess() {
   const [showConfirmation, setShowConfirmation] = useState(false);
   
   const handleReset = () => {
-    console.log("Reset process initiated");
+    console.log("Reset process initiated - FULL RESET");
     
     try {
-      // First, clear localStorage directly
+      // 1. Clear localStorage event state
       localStorage.removeItem('sailing_nationals_event_state');
       
-      // Clear selector voting history
+      // 2. Get all users and completely remove their voting history
       const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
-      const updatedUsers = users.map(user => {
-        if (user.role === 'selector') {
-          return {
-            ...user,
-            votingHistory: {} // Clear all voting history
-          };
-        }
-        return user;
-      });
+      const updatedUsers = users.map(user => ({
+        ...user,
+        votingHistory: undefined // Completely remove the property
+      }));
       
-      // Save updated users to localStorage
+      // 3. Save the cleaned users to localStorage
       localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
+      console.log("Completely removed voting history from all users in localStorage");
       
-      // Save updated users to Firebase
+      // 4. Update Firebase - remove voting history for each user
       try {
-        // Save each user separately to ensure proper updates
         updatedUsers.forEach(async (user) => {
           if (user.id) {
-            const userRef = ref(database, `users/${user.id}`);
-            await update(userRef, { votingHistory: {} });
-            console.log(`Reset voting history for user ${user.id} in Firebase`);
+            // Directly set votingHistory to null to completely remove it
+            const userRef = ref(database, `users/${user.id}/votingHistory`);
+            await set(userRef, null);
+            console.log(`Completely removed voting history for user ${user.id} in Firebase`);
           }
         });
         
-        // Also clear the entire event state in Firebase
+        // 5. Clear the entire event state in Firebase
         const eventStateRef = ref(database, 'eventState');
-        set(eventStateRef, null);
+        await set(eventStateRef, null);
         
         console.log("Reset Firebase data successfully");
       } catch (firebaseError) {
@@ -51,10 +47,13 @@ function ResetProcess() {
         // Continue anyway since we have localStorage updated
       }
       
-      // Now call the context function
+      // 6. Call the context function to reset React state
       resetEventState();
       
-      // Add a delay then force refresh the page
+      // 7. Force all users to refresh by setting a reset flag in localStorage
+      localStorage.setItem('sailing_nationals_reset_timestamp', Date.now().toString());
+      
+      // 8. Add a delay then force refresh the page
       setTimeout(() => {
         window.location.reload();
       }, 1000);

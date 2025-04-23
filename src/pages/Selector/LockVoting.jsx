@@ -35,6 +35,35 @@ function LockVoting() {
         }
     }, [user]);
 
+    useEffect(() => {
+        // Check if a reset has happened since this component last rendered
+        const checkForReset = () => {
+          const lastResetTime = localStorage.getItem('sailing_nationals_reset_timestamp');
+          const lastCheckTime = localStorage.getItem('sailing_nationals_last_reset_check') || '0';
+          
+          if (lastResetTime && lastResetTime > lastCheckTime) {
+            console.log("Reset detected, clearing component state");
+            // Reset component state
+            setSelectedLocks(new Set());
+            setIsSubmitted(false);
+            
+            // Update last check time
+            localStorage.setItem('sailing_nationals_last_reset_check', Date.now().toString());
+            
+            // Force a page reload to get fresh state
+            window.location.reload();
+          }
+        };
+        
+        // Check on component mount
+        checkForReset();
+        
+        // Also set up periodic checks
+        const checkInterval = setInterval(checkForReset, 5000); // Check every 5 seconds
+        
+        return () => clearInterval(checkInterval);
+      }, []);
+
     // All teams sorted alphabetically
     const sortedTeams = [...(safeGet(eventState, 'teams', []))].sort((a, b) => 
         a.name.localeCompare(b.name)
