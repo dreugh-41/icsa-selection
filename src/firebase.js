@@ -1,7 +1,7 @@
-// src/firebase.js
+// In your firebase.js
 import { initializeApp } from 'firebase/app';
 import { getDatabase } from 'firebase/database';
-import { getAuth } from 'firebase/auth';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -12,7 +12,7 @@ const firebaseConfig = {
     storageBucket: "icsaselection.firebasestorage.app",
     messagingSenderId: "390416164111",
     appId: "1:390416164111:web:9abe0b1b65ba15a19b4a7a"
-  };
+};
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
@@ -22,5 +22,10 @@ export const database = getDatabase(app);
 
 // Get a reference to the auth service
 export const auth = getAuth(app);
+
+// Verify auth is initialized
+onAuthStateChanged(auth, (user) => {
+  console.log("Auth state changed:", user ? "User logged in" : "No user");
+});
 
 export default app;

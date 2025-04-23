@@ -20,9 +20,12 @@ import {
   // Sign in a user
   export const loginUser = async (email, password) => {
     try {
+      console.log("Attempting login for:", email);
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      console.log("Login successful:", userCredential.user.uid);
       return userCredential.user;
     } catch (error) {
+      console.error("Login error:", error.code, error.message);
       throw error;
     }
   };

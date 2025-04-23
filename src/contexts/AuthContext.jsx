@@ -92,9 +92,12 @@ export function AuthProvider({ children }) {
   // Handle user login
   const login = async (email, password) => {
     try {
-      await loginUser(email, password);
-      return { success: true };
+      console.log("Login requested for:", email);
+      const user = await loginUser(email, password);
+      console.log("Login successful, user data:", user);
+      return { success: true, user };
     } catch (error) {
+      console.error("Login error in context:", error);
       return { success: false, error: error.message };
     }
   };

@@ -14,18 +14,21 @@ function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-
+    console.log("Login attempt with:", email);
+  
     try {
       const result = await login(email, password);
-      
+      console.log("Login result:", result);
+        
       if (result.success) {
-        // Redirect to appropriate dashboard based on user role
-        // This will happen automatically in the AuthContext when the user state updates
+        console.log("Login successful, redirecting...");
       } else {
         setError(result.error || 'Failed to log in');
+        console.error("Login failed:", result.error);
       }
     } catch (error) {
-      setError('An error occurred during login');
+      console.error("Error during login:", error);
+      setError('An error occurred during login: ' + error.message);
     }
   };
 
