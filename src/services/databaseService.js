@@ -50,3 +50,24 @@ export const onUsersChange = (callback) => {
     callback(snapshot.val());
   });
 };
+
+export const getEventStateWithRetry = async (retries = 3) => {
+    let lastError;
+    
+    for (let attempt = 0; attempt < retries; attempt++) {
+      try {
+        const snapshot = await get(ref(database, 'eventState'));
+        if (snapshot.exists()) {
+          return snapshot.val();
+        }
+        return null;
+      } catch (error) {
+        console.error(`Attempt ${attempt + 1}/${retries} failed:`, error);
+        lastError = error;
+        // Wait a bit before retrying
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    throw lastError;
+  };

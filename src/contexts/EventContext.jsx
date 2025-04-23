@@ -51,8 +51,22 @@ export function EventProvider({ children }) {
       try {
         const savedState = await getEventState();
         if (savedState) {
-          console.log('Loaded saved event state from Firebase');
-          setEventState(savedState);
+          // Ensure all properties exist
+          const completeState = {
+            phase: EVENT_PHASES.PRESELECTION,
+            currentRound: 0,
+            qualifiedTeams: [],
+            pendingQualifiedTeams: [],
+            remainingBerths: 36,
+            teams: [],
+            rankingGroup: [],
+            roundHistory: {},
+            selectionType: null,
+            alternateCount: 0,
+            ...savedState // Override defaults with saved data
+          };
+          
+          setEventState(completeState);
         }
         setLoading(false);
       } catch (error) {

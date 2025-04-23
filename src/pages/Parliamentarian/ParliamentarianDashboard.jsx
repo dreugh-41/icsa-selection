@@ -16,16 +16,36 @@ import ProcessSelection from '../../components/parliamentarian/ProcessSelection'
 import SeedingAdjustments from '../../components/parliamentarian/SeedingAdjustments';
 
 function ParliamentarianDashboard() {
-    const { eventState } = useEvent();
-
+  const { eventState, loading } = useEvent();
+  
+  // Add error boundary
+  const [hasError, setHasError] = useState(false);
     const [forceUpdate, setForceUpdate] = useState(false);
 
 useEffect(() => {
+  try {
     const subscription = realTimeService.subscribe('state_updated', () => {
         setForceUpdate(prev => !prev);
     });
     return () => subscription();
+  } catch (error) {
+    console.error("Dashboard error:", error);
+    setHasError(true);
+  }
 }, []);
+
+if (loading) {
+  return <div className="p-6 text-center">Loading...</div>;
+}
+
+if (hasError) {
+  return (
+    <div className="p-6 bg-red-50 rounded-lg">
+      <h2 className="text-xl font-bold text-red-700">Something went wrong</h2>
+      <p className="mt-2">There was an error loading the dashboard. Please try refreshing the page.</p>
+    </div>
+  );
+}
 
     // Helper function to determine what component to show based on the current phase
     const renderPhaseComponent = () => {
