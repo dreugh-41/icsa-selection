@@ -1,4 +1,5 @@
 // src/pages/Parliamentarian/Round1Management.jsx
+
 import React, { useState, useEffect } from 'react';
 import { useEvent } from '../../contexts/EventContext';
 
@@ -7,57 +8,48 @@ function Round1Management() {
     const { eventState, qualifyTeams } = useEvent();
     console.log("Retrieved eventState:", eventState);
     
-    // Make sure we have an empty Set if needed
+    // Simple state initialization without complex logic
     const [selectedTeams, setSelectedTeams] = useState(new Set());
     const [searchTerm, setSearchTerm] = useState('');
+    const [isSubmitted, setIsSubmitted] = useState(false);
+    const [sortedTeams, setSortedTeams] = useState([]);
     
-    // Safely initialize isSubmitted
-    const [isSubmitted, setIsSubmitted] = useState(() => {
+    // Move logic to useEffect to avoid errors during initialization
+    useEffect(() => {
         try {
-            console.log("Initializing isSubmitted state");
+            console.log("Running setup effect");
             
-            // Check if eventState exists
-            if (!eventState) {
-                console.log("eventState is undefined, defaulting to false");
-                return false;
+            // Check for AQ teams to determine if already submitted
+            if (eventState) {
+                const pendingTeams = Array.isArray(eventState.pendingQualifiedTeams) 
+                    ? eventState.pendingQualifiedTeams : [];
+                
+                const qualifiedTeams = Array.isArray(eventState.qualifiedTeams)
+                    ? eventState.qualifiedTeams : [];
+                
+                // Check for AQ teams
+                const hasPendingAQs = pendingTeams.some(team => 
+                    team && team.status && team.status.qualificationMethod === 'AQ');
+                
+                const hasQualifiedAQs = qualifiedTeams.some(team => 
+                    team && team.status && team.status.qualificationMethod === 'AQ');
+                
+                setIsSubmitted(hasPendingAQs || hasQualifiedAQs);
             }
             
-            // Check if arrays exist before accessing them
-            const pendingTeams = Array.isArray(eventState.pendingQualifiedTeams) 
-                ? eventState.pendingQualifiedTeams : [];
-            
-            const qualifiedTeams = Array.isArray(eventState.qualifiedTeams)
-                ? eventState.qualifiedTeams : [];
-            
-            // Check for AQ teams
-            const hasPendingAQs = pendingTeams.some(team => 
-                team && team.status && team.status.qualificationMethod === 'AQ');
-            
-            const hasQualifiedAQs = qualifiedTeams.some(team => 
-                team && team.status && team.status.qualificationMethod === 'AQ');
-            
-            return hasPendingAQs || hasQualifiedAQs;
-        } catch (error) {
-            console.error("Error in isSubmitted initialization:", error);
-            return false;
-        }
-    });
-
-    // Safely initialize teams
-    const sortedTeams = React.useMemo(() => {
-        try {
-            // Safety check for eventState and teams
-            if (!eventState || !Array.isArray(eventState.teams)) {
-                console.log("Teams array is undefined or not an array, returning empty array");
-                return [];
+            // Sort teams safely
+            if (eventState && Array.isArray(eventState.teams)) {
+                const sorted = [...eventState.teams].sort((a, b) => 
+                    (a?.name || "").localeCompare(b?.name || ""));
+                setSortedTeams(sorted);
+            } else {
+                setSortedTeams([]);
             }
-            
-            // Make a safe copy and sort
-            return [...eventState.teams].sort((a, b) => 
-                (a?.name || "").localeCompare(b?.name || ""));
         } catch (error) {
-            console.error("Error sorting teams:", error);
-            return [];
+            console.error("Error in setup effect:", error);
+            // Set safe defaults
+            setIsSubmitted(false);
+            setSortedTeams([]);
         }
     }, [eventState]);
 
@@ -76,48 +68,59 @@ function Round1Management() {
 
     // Handle finalizing AQ selections
     const finalizeAQSelections = () => {
-        if (selectedTeams.size !== 12) {
-            alert('You must select exactly 12 Automatic Qualifiers before finalizing.');
-            return;
+        try {
+            if (selectedTeams.size !== 12) {
+                alert('You must select exactly 12 Automatic Qualifiers before finalizing.');
+                return;
+            }
+            
+            // Safely process teams
+            if (!Array.isArray(eventState?.teams)) {
+                alert('Error: Teams data not available. Please refresh the page and try again.');
+                return;
+            }
+            
+            const qualifiedTeams = eventState.teams
+                .filter(team => team && selectedTeams.has(team.id))
+                .map(team => ({
+                    ...team,
+                    status: {
+                        ...(team.status || {}),
+                        isAQ: true,
+                        isQualified: true,
+                        qualificationMethod: 'AQ',
+                        qualificationRound: 1
+                    }
+                }));
+            
+            console.log("Creating AQ teams:", qualifiedTeams.length);
+            
+            // This will now set them as pending qualified teams
+            qualifyTeams(qualifiedTeams);
+            
+            // Set as submitted
+            setIsSubmitted(true);
+            
+            // Show a success message
+            alert("Automatic Qualifiers have been selected. They will be added to the qualified teams list when the round is finalized.");
+        } catch (error) {
+            console.error("Error finalizing AQ selections:", error);
+            alert("An error occurred while finalizing AQ selections. Please try again.");
         }
-        
-        // Safely access eventState.teams with null checks
-        const teamsArray = Array.isArray(eventState?.teams) ? eventState.teams : [];
-        
-        // Make sure we don't call filter on undefined
-        const qualifiedTeams = teamsArray
-            .filter(team => team && selectedTeams.has(team.id))
-            .map(team => ({
-                ...team,
-                status: {
-                    ...(team.status || {}),
-                    isAQ: true,
-                    isQualified: true,
-                    qualificationMethod: 'AQ',
-                    qualificationRound: 1
-                }
-            }));
-        
-        console.log("Creating AQ teams:", qualifiedTeams.length);
-        
-        // This will now set them as pending qualified teams
-        qualifyTeams(qualifiedTeams);
-        
-        // Set as submitted
-        setIsSubmitted(true);
-        
-        // Show a success message
-        alert("Automatic Qualifiers have been selected. They will be added to the qualified teams list when the round is finalized.");
     };
 
-    // Filter teams based on search term
+    // Filter teams based on search term - do this safely
     const filterTeams = (teams) => {
-        if (!searchTerm.trim()) return teams;
+        if (!searchTerm.trim() || !Array.isArray(teams)) {
+            return teams || [];
+        }
         
         return teams.filter(team => 
-            team.name.toLowerCase().includes(searchTerm.toLowerCase())
+            team?.name?.toLowerCase().includes(searchTerm.toLowerCase())
         );
     };
+
+    const filteredTeams = filterTeams(sortedTeams);
 
     return (
         <div className="w-full bg-white rounded-lg shadow-sm">
@@ -132,21 +135,23 @@ function Round1Management() {
                         <div className="mt-4">
                             <h4 className="font-medium mb-2">Selected AQ Teams:</h4>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
-                                {eventState.pendingQualifiedTeams
-                                    .filter(team => team.status?.qualificationMethod === 'AQ')
-                                    .map(team => (
-                                        <div key={team.id} className="bg-white p-3 rounded border border-green-200">
-                                            {team.name}
-                                        </div>
-                                    ))
+                                {eventState?.pendingQualifiedTeams && Array.isArray(eventState.pendingQualifiedTeams) &&
+                                    eventState.pendingQualifiedTeams
+                                        .filter(team => team?.status?.qualificationMethod === 'AQ')
+                                        .map(team => (
+                                            <div key={team.id} className="bg-white p-3 rounded border border-green-200">
+                                                {team.name}
+                                            </div>
+                                        ))
                                 }
-                                {eventState.qualifiedTeams
-                                    .filter(team => team.status?.qualificationMethod === 'AQ')
-                                    .map(team => (
-                                        <div key={team.id} className="bg-white p-3 rounded border border-green-200">
-                                            {team.name}
-                                        </div>
-                                    ))
+                                {eventState?.qualifiedTeams && Array.isArray(eventState.qualifiedTeams) &&
+                                    eventState.qualifiedTeams
+                                        .filter(team => team?.status?.qualificationMethod === 'AQ')
+                                        .map(team => (
+                                            <div key={team.id} className="bg-white p-3 rounded border border-green-200">
+                                                {team.name}
+                                            </div>
+                                        ))
                                 }
                             </div>
                         </div>
@@ -175,7 +180,6 @@ function Round1Management() {
                             )}
                         </div>
     
-                        {/* Rest of the existing content */}
                         {/* Instructions */}
                         <div className="mb-6 p-4 bg-gray-50 rounded-lg">
                             <p>Select 12 teams as Automatic Qualifiers. These teams will automatically advance.</p>
@@ -218,30 +222,30 @@ function Round1Management() {
                         <div className="space-y-6">
                             <div className="border rounded-lg p-4">
                                 <h4 className="font-medium mb-3">All Teams</h4>
-                                {/* Add max-height and overflow to create scrollable area */}
                                 <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
-                                    {filterTeams(sortedTeams).map(team => (
-                                        <div 
-                                            key={team.id}
-                                            className={`flex items-center justify-between p-2 rounded ${
-                                                selectedTeams.has(team.id) ? 'bg-blue-50' : 'hover:bg-gray-50'
-                                            }`}
-                                        >
-                                            <div>
-                                                <p className="font-medium">{team.name}</p>
+                                    {filteredTeams.length > 0 ? (
+                                        filteredTeams.map(team => (
+                                            <div 
+                                                key={team.id}
+                                                className={`flex items-center justify-between p-2 rounded ${
+                                                    selectedTeams.has(team.id) ? 'bg-blue-50' : 'hover:bg-gray-50'
+                                                }`}
+                                            >
+                                                <div>
+                                                    <p className="font-medium">{team.name}</p>
+                                                </div>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedTeams.has(team.id)}
+                                                    onChange={() => toggleTeamSelection(team.id)}
+                                                    disabled={!selectedTeams.has(team.id) && selectedTeams.size >= 12}
+                                                    className="h-5 w-5 text-blue-600"
+                                                />
                                             </div>
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedTeams.has(team.id)}
-                                                onChange={() => toggleTeamSelection(team.id)}
-                                                disabled={!selectedTeams.has(team.id) && selectedTeams.size >= 12}
-                                                className="h-5 w-5 text-blue-600"
-                                            />
-                                        </div>
-                                    ))}
-                                    {filterTeams(sortedTeams).length === 0 && (
+                                        ))
+                                    ) : (
                                         <div className="p-4 text-center text-gray-500 italic">
-                                            No teams match your search
+                                            {searchTerm ? 'No teams match your search' : 'No teams available'}
                                         </div>
                                     )}
                                 </div>
