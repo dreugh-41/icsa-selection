@@ -27,47 +27,60 @@ function LockVoteMonitoring() {
         return () => clearInterval(refreshInterval);
     }, []);
 
+    const debugLocalStorage = () => {
+        try {
+          const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+          console.log("DEBUG: All users in localStorage:", users);
+          
+          const selectors = users.filter(u => u.role === 'selector');
+          console.log("DEBUG: Selectors with round1 votes:", 
+            selectors.filter(s => s?.votingHistory?.round1?.submitted).length
+          );
+          
+          // Log detailed information for each selector
+          selectors.forEach(s => {
+            console.log(`Selector ${s.name} (${s.id}):`, {
+              hasVotingHistory: !!s.votingHistory,
+              hasRound1: !!s?.votingHistory?.round1,
+              hasSubmitted: !!s?.votingHistory?.round1?.submitted,
+              timestamp: s?.votingHistory?.round1?.timestamp,
+              voteCount: s?.votingHistory?.round1?.lockVotes?.length || 0
+            });
+          });
+          
+          return selectors;
+        } catch (error) {
+          console.error("Error inspecting localStorage:", error);
+          return [];
+        }
+      };
+
     // Separated loading logic to a function for reuse
     const loadData = () => {
         try {
           setLoading(true);
-          console.log("LockVoteMonitoring: Loading data from localStorage ONLY");
+          console.log("LockVoteMonitoring: Loading data from localStorage");
           
-          // ONLY use localStorage data - ignore Firebase
+          // Load all users to check voting status
           const allUsers = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
-          console.log("Found users in localStorage:", allUsers.length);
+          console.log("Found users:", allUsers.length);
           
           const selectorUsers = allUsers.filter(u => u && u.role === 'selector');
           console.log("Found selectors:", selectorUsers.length);
+
+          const debugSelectors = debugLocalStorage();
+            console.log("DEBUG: Found", debugSelectors.length, "selectors in localStorage");
           
-          // Detailed logging of each selector
+          // Detailed logging of each selector's voting status
           selectorUsers.forEach(selector => {
-            const hasVoted = selector?.votingHistory?.round1?.submitted || false;
-            console.log(`Selector ${selector.name}: ${hasVoted ? 'HAS' : 'has NOT'} submitted votes`);
-            if (hasVoted) {
-              console.log(`  Vote count: ${selector?.votingHistory?.round1?.lockVotes?.length || 0}`);
-              console.log(`  Timestamp: ${selector?.votingHistory?.round1?.timestamp}`);
-            }
+            console.log(`Selector ${selector.name} voting status:`, {
+              hasSubmitted: selector?.votingHistory?.round1?.submitted,
+              timestamp: selector?.votingHistory?.round1?.timestamp,
+              votes: selector?.votingHistory?.round1?.lockVotes?.length || 0
+            });
           });
           
-          // Get selector status
-          const selectorStatus = selectorUsers.map(selector => {
-            const hasVoted = selector?.votingHistory?.round1?.submitted || false;
-            const timestamp = selector?.votingHistory?.round1?.timestamp || null;
-            
-            return {
-              id: selector.id,
-              name: selector.name, 
-              hasVoted,
-              timestamp
-            };
-          });
-          
-          setSelectors(selectorStatus);
-          
-          // Continue with the rest of your function...
-          
-          setLoading(false);
+          // Rest of your loadData function...
         } catch (error) {
           console.error("Error loading vote data:", error);
           setLoading(false);
@@ -77,13 +90,16 @@ function LockVoteMonitoring() {
     // Use useEffect to load data
     useEffect(() => {
         loadData();
-    }, [eventState.teams, refreshKey]);
+        // Set up an interval to refresh data every 10 seconds
+        const interval = setInterval(refreshData, 10000);
+        return () => clearInterval(interval);
+      }, [eventState.teams]);
     
     // Add periodic automatic refresh for real-time updates
     useEffect(() => {
-        const refreshInterval = setInterval(refreshData, 30000); // Refresh every 30 seconds
+        const refreshInterval = setInterval(refreshData, 10000); // Refresh every 10 seconds
         return () => clearInterval(refreshInterval);
-    }, []);
+      }, []);
     
     // Teams that should be added to ranking group (60% or more votes)
     const qualifyingTeams = teamVotes.filter(team => team.qualifies);
@@ -120,17 +136,28 @@ function LockVoteMonitoring() {
         <div className="bg-white p-6 rounded-lg shadow-sm">
             <h2 className="text-xl font-semibold mb-4">Lock Vote Monitoring</h2>
             
-            {/* Add a refresh button */}
-            <div className="mb-4 flex justify-end">
+            <div className="mb-4 bg-yellow-50 p-4 rounded-lg">
+                <h3 className="font-medium">Debug Info</h3>
                 <button 
                     onClick={refreshData}
-                    className="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-lg text-gray-700 flex items-center"
+                    className="px-3 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600 mb-2"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
-                    <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
-                    </svg>
-                    Refresh Data
+                    Refresh Data Now
                 </button>
+                <div className="text-xs">
+                    <p>Selectors who have voted: {selectors.filter(s => s.hasVoted).length}/{selectors.length}</p>
+                    <div className="mt-2">
+                    <strong>Selector Status:</strong>
+                    <ul className="space-y-1 mt-1">
+                        {selectors.map(s => (
+                        <li key={s.id}>
+                            {s.name}: {s.hasVoted ? '✅ Voted' : '❌ Not voted'} 
+                            {s.timestamp ? ` at ${new Date(s.timestamp).toLocaleTimeString()}` : ''}
+                        </li>
+                        ))}
+                    </ul>
+                    </div>
+                </div>
                 </div>
             
             {/* Show loading state */}
