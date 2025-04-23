@@ -156,119 +156,102 @@ function LockVoteMonitoring() {
       };
 
     // Separated loading logic to a function for reuse
-    const loadData = async () => {
+    const loadData = () => {
         try {
           setLoading(true);
-          console.log("LockVoteMonitoring: Loading data from multiple sources");
+          console.log("LockVoteMonitoring: Loading data from localStorage");
           
-          // Try to get users from Firebase first
-          try {
-            const usersSnapshot = await get(ref(database, 'users'));
-            if (usersSnapshot.exists()) {
-              const usersData = usersSnapshot.val();
-              console.log("Successfully loaded users from Firebase:", Object.keys(usersData).length);
-              
-              // Convert from object to array
-              const usersArray = Object.values(usersData);
-              
-              // Filter for selectors
-              const selectorUsers = usersArray.filter(u => u && u.role === 'selector');
-              console.log("Found selectors in Firebase:", selectorUsers.length);
-              
-              // Get selector status with detailed logging
-              const selectorStatus = selectorUsers.map(selector => {
-                const hasVoted = selector && selector.votingHistory && 
-                             selector.votingHistory.round1 && 
-                             selector.votingHistory.round1.submitted || false;
-                const timestamp = selector && selector.votingHistory && 
-                              selector.votingHistory.round1 && 
-                              selector.votingHistory.round1.timestamp || null;
-                
-                console.log(`Selector ${selector.name}: voted=${hasVoted}, timestamp=${timestamp}`);
-                
-                return {
-                  id: selector.id,
-                  name: selector.name, 
-                  hasVoted,
-                  timestamp
-                };
-              });
-              
-              setSelectors(selectorStatus);
-              
-              // Count each team's votes with detailed logging
-              const voteCounts = {};
-              const votingSelectors = selectorUsers.filter(s => s && s.votingHistory && 
-                                                s.votingHistory.round1 && 
-                                                s.votingHistory.round1.submitted).length;
-              console.log("Selectors who voted:", votingSelectors);
-              
-              // If no one has voted yet, just show empty data
-              if (votingSelectors === 0) {
-                const emptyVotes = (eventState && eventState.teams ? eventState.teams : [])
-                  .filter(team => !(team && team.status && team.status.isQualified))
-                  .map(team => ({
-                    ...team,
-                    votePercentage: 0,
-                    qualifies: false
-                  }));
-                
-                setTeamVotes(emptyVotes);
-                setLoading(false);
-                return;
-              }
-              
-              // Initialize vote counts for all teams
-              if (eventState && eventState.teams) {
-                eventState.teams.forEach(team => {
-                  if (team && team.id) {
-                    voteCounts[team.id] = 0;
-                  }
-                });
-              }
-              
-              // Count votes from each selector's voting history with detailed logging
-              selectorUsers.forEach(selector => {
-                const votes = selector && selector.votingHistory && 
-                           selector.votingHistory.round1 && 
-                           selector.votingHistory.round1.lockVotes || [];
-                console.log(`Selector ${selector.name}: ${votes.length} lock votes`);
-                
-                votes.forEach(teamId => {
-                  if (voteCounts[teamId] !== undefined) {
-                    voteCounts[teamId] += 1;
-                  }
-                });
-              });
-              
-              // Calculate percentages and qualifies status
-              const processedTeamVotes = (eventState && eventState.teams ? eventState.teams : [])
-                .filter(team => !(team && team.status && team.status.isQualified))
-                .map(team => {
-                  const voteCount = voteCounts[team.id] || 0;
-                  const votePercentage = votingSelectors > 0 
-                    ? Math.round((voteCount / votingSelectors) * 100)
-                    : 0;
-                  
-                  return {
-                    ...team,
-                    votePercentage,
-                    qualifies: votePercentage >= 60 // 60% threshold
-                  };
-                });
-              
-              setTeamVotes(processedTeamVotes);
-              setLoading(false);
-              
-              console.log("Data loading from Firebase complete");
-            } else {
-              console.log("No users found in Firebase, falling back to localStorage");
-              fallbackToLocalStorage();
-            }
-          } catch (firebaseError) {
-            console.error("Error reading from Firebase:", firebaseError);
-            fallbackToLocalStorage();
+          // Load all users to check voting status
+          const allUsers = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+          console.log("Found users:", allUsers.length);
+          
+          // Only include active selectors
+          const selectorUsers = allUsers.filter(u => u && u.role === 'selector' && u.isActive !== false);
+          console.log("Found active selectors:", selectorUsers.length);
+          
+          // Create a detailed list of selectors and their voting status
+          const selectorDetails = selectorUsers.map(selector => {
+            // Check for round1 voting history
+            const hasRound1 = selector?.votingHistory?.round1 !== undefined;
+            const isSubmitted = selector?.votingHistory?.round1?.submitted === true;
+            const voteCount = selector?.votingHistory?.round1?.lockVotes?.length || 0;
+            const timestamp = selector?.votingHistory?.round1?.timestamp || null;
+            
+            console.log(`Selector ${selector.name}: hasRound1=${hasRound1}, submitted=${isSubmitted}, votes=${voteCount}`);
+            
+            return {
+              id: selector.id,
+              name: selector.name,
+              hasVoted: isSubmitted, // Explicitly check for true
+              timestamp,
+              voteCount
+            };
+          });
+          
+          setSelectors(selectorDetails);
+          
+          // Count each team's votes with detailed logging
+          const voteCounts = {};
+          const votingSelectors = selectorUsers.filter(s => s?.votingHistory?.round1?.submitted === true).length;
+          
+          console.log("Selectors who voted:", votingSelectors);
+          
+          // If no one has voted yet, just show empty data
+          if (votingSelectors === 0) {
+            const emptyVotes = (eventState && eventState.teams ? eventState.teams : [])
+              .filter(team => !(team && team.status && team.status.isQualified))
+              .map(team => ({
+                ...team,
+                votePercentage: 0,
+                qualifies: false
+              }));
+            
+            setTeamVotes(emptyVotes);
+            setLoading(false);
+            return;
           }
+          
+          // Initialize vote counts for all teams
+          if (eventState && eventState.teams) {
+            eventState.teams.forEach(team => {
+              if (team && team.id) {
+                voteCounts[team.id] = 0;
+              }
+            });
+          }
+          
+          // Count votes from each selector's voting history with detailed logging
+          selectorUsers.forEach(selector => {
+            const votes = selector?.votingHistory?.round1?.lockVotes || [];
+            console.log(`Selector ${selector.name}: ${votes.length} lock votes`);
+            
+            votes.forEach(teamId => {
+              if (voteCounts[teamId] !== undefined) {
+                voteCounts[teamId] += 1;
+              }
+            });
+          });
+          
+          // Calculate percentages and qualifies status
+          const processedTeamVotes = (eventState && eventState.teams ? eventState.teams : [])
+            .filter(team => !(team && team.status && team.status.isQualified))
+            .map(team => {
+              const voteCount = voteCounts[team.id] || 0;
+              const votePercentage = votingSelectors > 0 
+                ? Math.round((voteCount / votingSelectors) * 100)
+                : 0;
+              
+              return {
+                ...team,
+                votePercentage,
+                qualifies: votePercentage >= 60 // 60% threshold
+              };
+            });
+          
+          setTeamVotes(processedTeamVotes);
+          setLoading(false);
+          
+          console.log("Data loading complete");
         } catch (error) {
           console.error("Error loading vote data:", error);
           setLoading(false);
@@ -295,28 +278,64 @@ function LockVoteMonitoring() {
     
     // Handle adding teams to ranking group
     const finalizeQualifiedTeams = () => {
-        console.log("DEBUG: Current selectors state:", selectors);
-        console.log("DEBUG: Current teamVotes state:", teamVotes);
-        // Convert qualifying teams to the right format for our state system
-        const teamsToQualify = qualifyingTeams.map(team => {
+        // First log what we're checking
+        console.log("Checking if all selectors have voted");
+        console.log("Current selectors state:", selectors);
+        
+        // Get a fresh copy of selector data directly from localStorage
+        const allUsers = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+        const activeSelectorUsers = allUsers.filter(u => u.role === 'selector' && u.isActive !== false);
+        
+        console.log("Active selectors from localStorage:", activeSelectorUsers.length);
+        
+        // Count how many have actually submitted votes
+        const selectorsWithVotes = activeSelectorUsers.filter(
+          s => s?.votingHistory?.round1?.submitted === true
+        );
+        
+        console.log("Selectors with submitted votes:", selectorsWithVotes.length);
+        console.log("Selector voting details:", selectorsWithVotes.map(s => ({
+          name: s.name,
+          submitted: s?.votingHistory?.round1?.submitted,
+          votes: s?.votingHistory?.round1?.lockVotes?.length || 0
+        })));
+        
+        // Use this direct check instead of relying on component state
+        const allSelectorsVoted = selectorsWithVotes.length === activeSelectorUsers.length;
+        
+        if (!allSelectorsVoted && activeSelectorUsers.length > 0) {
+          alert(`Not all selectors have submitted their votes (${selectorsWithVotes.length}/${activeSelectorUsers.length}). Please wait for all votes before advancing.`);
+          return;
+        }
+        
+        // If there are no teams that qualify, inform the user
+        if (qualifyingTeams.length === 0) {
+          alert('No teams have received enough votes to qualify automatically (60% threshold). You can still proceed to the next phase.');
+          return;
+        }
+        
+        if (window.confirm(`Are you sure you want to qualify ${qualifyingTeams.length} teams based on lock votes?`)) {
+          // Convert qualifying teams to the right format for our state system
+          const teamsToQualify = qualifyingTeams.map(team => {
             const originalTeam = eventState.teams.find(t => t.id === team.id);
             return {
-                ...originalTeam,
-                status: {
-                    ...originalTeam.status,
-                    isLocked: true,
-                    isQualified: true,
-                    qualificationMethod: 'LOCK',
-                    qualificationRound: eventState.currentRound
-                }
+              ...originalTeam,
+              status: {
+                ...originalTeam.status,
+                isLocked: true,
+                isQualified: true,
+                qualificationMethod: 'LOCK',
+                qualificationRound: eventState.currentRound
+              }
             };
-        });
-        
-        // Update our state with the newly qualified teams (as pending)
-        qualifyTeams(teamsToQualify);
-        
-        alert(`${teamsToQualify.length} teams have been qualified through lock voting! They will be officially qualified when the round is finalized.`);
-    };
+          });
+          
+          // Update our state with the newly qualified teams (as pending)
+          qualifyTeams(teamsToQualify);
+          
+          alert(`${teamsToQualify.length} teams have been qualified through lock voting! They will be officially qualified when the round is finalized.`);
+        }
+      };
     
     // Sort by vote percentage (highest first)
     const sortedTeamVotes = [...teamVotes].sort((a, b) => b.votePercentage - a.votePercentage);
