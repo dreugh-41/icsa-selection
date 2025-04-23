@@ -75,16 +75,9 @@ export function EventProvider({ children }) {
     
     initializeData();
     
-    // Set up listener for real-time updates
-    const unsubscribe = onEventStateChange((newState) => {
-      if (newState) {
-        console.log('Event state updated from Firebase');
-        setEventState(newState);
-      }
-    });
+    // No more real-time updates - rely on manual refreshes instead
+    // This comment replaces the onEventStateChange subscription
     
-    // Clean up listener on unmount
-    return () => unsubscribe();
   }, []);
 
   // Save state to Firebase whenever it changes

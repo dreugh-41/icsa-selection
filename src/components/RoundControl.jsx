@@ -245,6 +245,10 @@ function RoundControl() {
                 </div>
                 <button
                     onClick={() => {
+                        // Disable the button immediately to prevent double-clicks
+                        const btn = event.currentTarget;
+                        btn.disabled = true;
+                        btn.classList.add('opacity-50', 'cursor-not-allowed');
                         bypassSelectorCheck();
                         // Check if teams have been uploaded before starting the process
                         if (eventState.phase === EVENT_PHASES.PRESELECTION && 
@@ -384,17 +388,20 @@ function RoundControl() {
                         }
                         
                         // If all checks pass, advance to the next phase
-                                        advancePhase();
-                    
-                    // Add a delay before reload
-                    setTimeout(() => {
-                    window.location.reload();
-                    }, 2000); // 2 second delay
-                }}
-                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                {getNextPhaseDisplay()}
-                </button>
+                        advancePhase();
+    
+                        // Add a message and force reload
+                        alert("Phase advanced successfully! The page will now refresh.");
+                        
+                        // Force reload after a delay
+                        setTimeout(() => {
+                        window.location.reload();
+                        }, 1000);
+                    }}
+                    className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                    {getNextPhaseDisplay()}
+                    </button>
             </div>
         </div>
     );

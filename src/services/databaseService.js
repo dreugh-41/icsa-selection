@@ -2,25 +2,36 @@
 import { ref, set, get, onValue, update } from 'firebase/database';
 import { database } from '../firebase';
 
+let lastSaveTime = 0;
+const DEBOUNCE_TIME = 3000; // 3 seconds
+
 // Save event state to Firebase
 export const saveEventState = async (eventState) => {
     try {
-      // Add timestamp for tracking
-      const eventStateWithTimestamp = {
-        ...eventState,
-        lastSavedToFirebase: Date.now()
-      };
+      const now = Date.now();
+      
+      // Don't save if less than 3 seconds have passed since last save
+      if (now - lastSaveTime < DEBOUNCE_TIME) {
+        console.log("Skipping event state save - too soon since last save");
+        return false;
+      }
+      
+      // Update the last save time
+      lastSaveTime = now;
       
       console.log("Saving event state to Firebase...");
-      await set(ref(database, 'eventState'), eventStateWithTimestamp);
+      await set(ref(database, 'eventState'), eventState);
       console.log("Successfully saved event state to Firebase");
+      
+      // Also save to localStorage
+      localStorage.setItem('sailing_nationals_event_state', JSON.stringify(eventState));
+      
       return true;
     } catch (error) {
       console.error("Error saving event state to Firebase:", error);
       
-      // Save to localStorage as backup
+      // Still save to localStorage as backup
       localStorage.setItem('sailing_nationals_event_state', JSON.stringify(eventState));
-      console.log("Saved to localStorage as backup");
       
       return false;
     }
