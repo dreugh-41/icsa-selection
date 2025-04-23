@@ -11,7 +11,7 @@ import CompletionSummary from '../../components/CompletionSummary';
 import SeedingAdjustments from '../../components/parliamentarian/SeedingAdjustments';
 
 function SelectorDashboard() {
-    const { eventState } = useEvent();
+    const { eventState, loading } = useEvent();
 
     const [forceUpdate, setForceUpdate] = useState(false);
     
@@ -21,6 +21,14 @@ function SelectorDashboard() {
         });
         return () => subscription();
     }, []);
+
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center h-64">
+                <div className="spinner">Loading...</div>
+            </div>
+        );
+    }
 
     // Helper function to determine what component to show based on the current phase
     const renderPhaseComponent = () => {
@@ -74,17 +82,20 @@ function SelectorDashboard() {
 
     // Display information about qualified teams
     const renderQualifiedTeamsInfo = () => {
+        // Check if eventState.qualifiedTeams exists before accessing it
+        const qualifiedTeamsCount = eventState.qualifiedTeams?.length || 0;
+        
         return (
             <div className="bg-white p-6 rounded-lg shadow-sm">
                 <h2 className="text-xl font-semibold mb-4">Qualification Status</h2>
                 <div className="flex items-center justify-between mb-4">
                     <div>
-                        <p className="text-gray-700">Teams Qualified: {eventState.qualifiedTeams.length}</p>
-                        <p className="text-gray-700">Remaining Berths: {eventState.remainingBerths}</p>
+                        <p className="text-gray-700">Teams Qualified: {qualifiedTeamsCount}</p>
+                        <p className="text-gray-700">Remaining Berths: {eventState.remainingBerths || 0}</p>
                     </div>
                 </div>
                 
-                {eventState.qualifiedTeams.length > 0 && (
+                {(eventState.qualifiedTeams && eventState.qualifiedTeams.length > 0) && (
                     <div className="mt-4">
                         <h3 className="text-lg font-medium mb-2">Qualified Teams</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -93,7 +104,7 @@ function SelectorDashboard() {
                                      className="p-2 bg-green-50 rounded-lg flex justify-between items-center">
                                     <span>{team.name}</span>
                                     <span className="text-sm text-green-600">
-                                        {team.status.qualificationMethod}
+                                        {team.status?.qualificationMethod || 'Unknown'}
                                     </span>
                                 </div>
                             ))}
