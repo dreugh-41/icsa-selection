@@ -317,7 +317,7 @@ function RoundControl() {
                         const btn = event.currentTarget;
                         btn.disabled = true;
                         btn.classList.add('opacity-50', 'cursor-not-allowed');
-                        bypassSelectorCheck();
+                        //bypassSelectorCheck();
                         // Check if teams have been uploaded before starting the process
                         if (eventState.phase === EVENT_PHASES.PRESELECTION && 
                             (!eventState.teams || eventState.teams.length === 0)) {
@@ -328,6 +328,7 @@ function RoundControl() {
                         // Check if there are pending qualifications that need to be finalized
                         if (eventState.phase === EVENT_PHASES.ROUND1_AQ && 
                             !eventState.pendingQualifiedTeams?.some(team => team.status?.qualificationMethod === 'AQ')) {
+                                bypassSelectorCheck()
                             alert('Please finalize AQ selections before advancing to the next phase.');
                             return;
                         }
