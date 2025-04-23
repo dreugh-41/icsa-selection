@@ -47,24 +47,20 @@ export function EventProvider({ children }) {
 
   // Load initial state and set up listener
   useEffect(() => {
-    // Initialize from Firebase
+    // Initialize from Firebase only
     const initializeData = async () => {
       try {
-        // First try localStorage
-        const localState = localStorage.getItem('sailing_nationals_event_state');
-        if (localState) {
-          const parsedState = JSON.parse(localState);
-          console.log('Loaded event state from localStorage');
-          setEventState(parsedState);
-          setLoading(false);
-          return;
-        }
-        
-        // If not in localStorage, try Firebase
+        // Try Firebase first and only
         const savedState = await getEventState();
         if (savedState) {
           console.log('Loaded saved event state from Firebase');
           setEventState(savedState);
+          // Optionally update localStorage as a backup
+          localStorage.setItem('sailing_nationals_event_state', JSON.stringify(savedState));
+        } else {
+          // If no data in Firebase, use default state
+          console.log('No state found in Firebase, using default');
+          // Do not load from localStorage as fallback
         }
         setLoading(false);
       } catch (error) {
@@ -75,9 +71,18 @@ export function EventProvider({ children }) {
     
     initializeData();
     
-    // No more real-time updates - rely on manual refreshes instead
-    // This comment replaces the onEventStateChange subscription
+    // Set up listener for real-time updates from Firebase
+    const unsubscribe = onEventStateChange((newState) => {
+      if (newState) {
+        console.log('Event state updated from Firebase');
+        setEventState(newState);
+        // Update localStorage as backup
+        localStorage.setItem('sailing_nationals_event_state', JSON.stringify(newState));
+      }
+    });
     
+    // Clean up listener on unmount
+    return () => unsubscribe();
   }, []);
 
   // Save state to Firebase whenever it changes

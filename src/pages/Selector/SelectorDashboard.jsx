@@ -11,6 +11,8 @@ import CompletionSummary from '../../components/CompletionSummary';
 import SeedingAdjustments from '../../components/parliamentarian/SeedingAdjustments';
 import { safeGet, safeArrayLength } from '../../utils/safeFetch';
 import { useAuth } from '../../contexts/AuthContext';
+import { ref, get } from 'firebase/database';
+import { database } from '../../firebase';
 
 function SelectorDashboard() {
     const { eventState, loading } = useEvent();
@@ -69,6 +71,47 @@ function SelectorDashboard() {
     useEffect(() => {
       console.log("SelectorDashboard - Event state:", eventState);
     }, [eventState]);
+
+    useEffect(() => {
+        // Check if the Firebase state is reset by adding a function to check for changes
+        const checkForReset = async () => {
+          try {
+            // Use Firebase directly instead of a separate function
+            const eventStateRef = ref(database, 'eventState');
+            const snapshot = await get(eventStateRef);
+            
+            // Get the current localStorage state
+            const localState = JSON.parse(localStorage.getItem('sailing_nationals_event_state') || 'null');
+            
+            // If Firebase has no state or null state but localStorage does, there was likely a reset
+            if ((!snapshot.exists() || snapshot.val() === null) && localState) {
+              console.log("Detected reset: Firebase empty but localStorage has data");
+              localStorage.removeItem('sailing_nationals_event_state');
+              window.location.reload();
+              return;
+            }
+            
+            // If phases don't match, update from Firebase
+            const firebaseState = snapshot.val();
+            if (firebaseState && localState && firebaseState.phase !== localState.phase) {
+              console.log("Phase mismatch between Firebase and localStorage");
+              localStorage.setItem('sailing_nationals_event_state', JSON.stringify(firebaseState));
+              window.location.reload();
+            }
+          } catch (error) {
+            console.error("Error checking state:", error);
+          }
+        };
+        
+        // Check on mount
+        checkForReset();
+        
+        // Set up interval to check periodically
+        const interval = setInterval(checkForReset, 5000);
+        
+        // Clean up interval on unmount
+        return () => clearInterval(interval);
+      }, []);
   
     if (loading) {
       return <div className="p-6 text-center">Loading...</div>;
