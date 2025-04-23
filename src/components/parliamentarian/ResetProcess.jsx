@@ -8,7 +8,7 @@ function ResetProcess() {
   const { resetEventState } = useEvent();
   const [showConfirmation, setShowConfirmation] = useState(false);
   
-  const handleReset = () => {
+  const handleReset = async () => {
     console.log("Reset process initiated - FULL RESET");
     
     try {
@@ -28,14 +28,15 @@ function ResetProcess() {
       
       // 4. Update Firebase - remove voting history for each user
       try {
-        updatedUsers.forEach(async (user) => {
+        // Use Promise.all to wait for all Firebase operations to complete
+        await Promise.all(updatedUsers.map(async (user) => {
           if (user.id) {
             // Directly set votingHistory to null to completely remove it
             const userRef = ref(database, `users/${user.id}/votingHistory`);
             await set(userRef, null);
             console.log(`Completely removed voting history for user ${user.id} in Firebase`);
           }
-        });
+        }));
         
         // 5. Clear the entire event state in Firebase
         const eventStateRef = ref(database, 'eventState');
