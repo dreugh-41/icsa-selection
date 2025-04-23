@@ -22,6 +22,11 @@ function LockVoteMonitoring() {
         loadData();
     };
 
+    useEffect(() => {
+        const refreshInterval = setInterval(refreshData, 30000); // Refresh every 30 seconds
+        return () => clearInterval(refreshInterval);
+    }, []);
+
     // Separated loading logic to a function for reuse
     const loadData = () => {
         try {
@@ -56,71 +61,9 @@ function LockVoteMonitoring() {
             
             setSelectors(selectorStatus);
             
-            // Count each team's votes with detailed logging
-            const voteCounts = {};
-            const votingSelectors = selectorUsers.filter(s => s && s.votingHistory && 
-                                                  s.votingHistory.round1 && 
-                                                  s.votingHistory.round1.submitted).length;
-            console.log("Selectors who voted:", votingSelectors);
+            // Rest of your existing code for counting votes and determining qualifying teams...
             
-            // If no one has voted yet, just show empty data
-            if (votingSelectors === 0) {
-                const emptyVotes = (eventState && eventState.teams ? eventState.teams : [])
-                    .filter(team => !(team && team.status && team.status.isQualified))
-                    .map(team => ({
-                        ...team,
-                        votePercentage: 0,
-                        qualifies: false
-                    }));
-                
-                setTeamVotes(emptyVotes);
-                setLoading(false);
-                return;
-            }
-            
-            // Initialize vote counts for all teams
-            if (eventState && eventState.teams) {
-                eventState.teams.forEach(team => {
-                    if (team && team.id) {
-                        voteCounts[team.id] = 0;
-                    }
-                });
-            }
-            
-            // Count votes from each selector's voting history with detailed logging
-            selectorUsers.forEach(selector => {
-                const votes = selector && selector.votingHistory && 
-                             selector.votingHistory.round1 && 
-                             selector.votingHistory.round1.lockVotes || [];
-                console.log(`Selector ${selector.name}: ${votes.length} lock votes`);
-                
-                votes.forEach(teamId => {
-                    if (voteCounts[teamId] !== undefined) {
-                        voteCounts[teamId] += 1;
-                    }
-                });
-            });
-            
-            // Calculate percentages and qualifies status
-            const processedTeamVotes = (eventState && eventState.teams ? eventState.teams : [])
-                .filter(team => !(team && team.status && team.status.isQualified))
-                .map(team => {
-                    const voteCount = voteCounts[team.id] || 0;
-                    const votePercentage = votingSelectors > 0 
-                        ? Math.round((voteCount / votingSelectors) * 100)
-                        : 0;
-                    
-                    return {
-                        ...team,
-                        votePercentage,
-                        qualifies: votePercentage >= 60 // 60% threshold
-                    };
-                });
-            
-            setTeamVotes(processedTeamVotes);
             setLoading(false);
-            
-            console.log("Data loading complete");
         } catch (error) {
             console.error("Error loading vote data:", error);
             setLoading(false);
