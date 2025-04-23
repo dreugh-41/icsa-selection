@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useEvent } from '../../contexts/EventContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { ref, get } from 'firebase/database';
+import { database } from '../../firebase';
 
 function SeedingAdjustments() {
   const { eventState } = useEvent();
@@ -165,9 +167,69 @@ function SeedingAdjustments() {
   const saveAdjustments = () => {
     if (user.role !== 'parliamentarian') return;
     
-    saveAdjustmentsToStorage(eastTeams, westTeams);
-    alert('Seeding adjustments have been saved successfully!');
+    try {
+      // Prepare adjustments data
+      const adjustments = {
+        east: eastTeams,
+        west: westTeams,
+        timestamp: new Date().toISOString()
+      };
+      
+      // Save to localStorage
+      localStorage.setItem('sailing_nationals_seeding_adjustments', JSON.stringify(adjustments));
+      
+      // Also save to Firebase for better synchronization
+      try {
+        // Save to Firebase
+        const adjustmentsRef = ref(database, 'seedingAdjustments');
+        set(adjustmentsRef, adjustments);
+        console.log("Saved seeding adjustments to Firebase");
+      } catch (firebaseError) {
+        console.error("Error saving to Firebase:", firebaseError);
+      }
+      
+      alert('Seeding adjustments have been saved successfully!');
+    } catch (error) {
+      console.error("Error saving seeding adjustments:", error);
+      alert("There was an error saving the adjustments");
+    }
   };
+
+  useEffect(() => {
+    // Check Firebase for seeding adjustments
+    const checkFirebaseAdjustments = async () => {
+      try {
+        const adjustmentsRef = ref(database, 'seedingAdjustments');
+        const snapshot = await get(adjustmentsRef);
+        
+        if (snapshot.exists()) {
+          const firebaseAdjustments = snapshot.val();
+          
+          // Check if newer than what we have
+          const localTimestamp = localStorage.getItem('seeding_adjustments_timestamp');
+          
+          if (!localTimestamp || firebaseAdjustments.timestamp > localTimestamp) {
+            console.log("Found newer seeding adjustments in Firebase");
+            setEastTeams(firebaseAdjustments.east);
+            setWestTeams(firebaseAdjustments.west);
+            
+            // Update localStorage timestamp
+            localStorage.setItem('seeding_adjustments_timestamp', firebaseAdjustments.timestamp);
+          }
+        }
+      } catch (error) {
+        console.error("Error checking Firebase for seeding adjustments:", error);
+      }
+    };
+    
+    // Check on component mount
+    checkFirebaseAdjustments();
+    
+    // Set up interval to check periodically
+    const interval = setInterval(checkFirebaseAdjustments, 10000);
+    
+    return () => clearInterval(interval);
+  }, []);
 
   // Add periodic check for updates (for selectors)
   useEffect(() => {

@@ -1,6 +1,8 @@
 // src/components/CompletionSummary.jsx
 import React, { useState, useEffect } from 'react';
 import { useEvent } from '../contexts/EventContext';
+import { ref, get } from 'firebase/database';
+import { database } from '../firebase';
 
 function CompletionSummary() {
   const { eventState } = useEvent();
@@ -14,6 +16,34 @@ function CompletionSummary() {
   // Function to check if a seed belongs to East division
   const isEastSeed = (seed) => eastSeeds.includes(seed);
 
+  useEffect(() => {
+    // Try to load completion data from Firebase
+    const loadCompletionData = async () => {
+      try {
+        // Try to get seeding adjustments from Firebase
+        const adjustmentsRef = ref(database, 'seedingAdjustments');
+        const snapshot = await get(adjustmentsRef);
+        
+        if (snapshot.exists()) {
+          const adjustments = snapshot.val();
+          console.log("Found seeding adjustments in Firebase");
+          
+          // Use the adjustments
+          setEastTeams(adjustments.east || []);
+          setWestTeams(adjustments.west || []);
+        } else {
+          console.log("No seeding adjustments found in Firebase, using context data");
+          // Your existing initialization code will run...
+        }
+      } catch (error) {
+        console.error("Error loading data from Firebase:", error);
+        // Continue with existing initialization
+      }
+    };
+    
+    loadCompletionData();
+  }, []);
+  
   useEffect(() => {
     // Get all qualified teams (excluding alternates)
     const qualifiedTeams = [...eventState.qualifiedTeams].filter(team => 

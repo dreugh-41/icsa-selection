@@ -193,6 +193,59 @@ function RoundControl() {
           return false;
         }
       };
+
+      const bypassSeedingCheck = () => {
+        try {
+          const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+          
+          // Mark all selectors as having submitted seedings
+          const updatedUsers = users.map(user => {
+            if (user.role === 'selector') {
+              // Create or update voting history for seeding
+              const votingHistory = user.votingHistory || {};
+              votingHistory.seeding = votingHistory.seeding || {};
+              votingHistory.seeding.submitted = true;
+              votingHistory.seeding.timestamp = votingHistory.seeding.timestamp || new Date().toISOString();
+              
+              // If no rankings exist, create default rankings based on qualified teams
+              if (!votingHistory.seeding.rankings) {
+                const qualifiedTeams = [
+                  ...(eventState.qualifiedTeams || [])
+                ].filter(team => 
+                  !team.status.isAlternate && 
+                  team.status.qualificationMethod !== 'ALTERNATE'
+                );
+                
+                votingHistory.seeding.rankings = qualifiedTeams.map(team => team.id);
+              }
+              
+              return {...user, votingHistory};
+            }
+            return user;
+          });
+          
+          // Save back to localStorage
+          localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
+          console.log("Updated all selectors to show they've submitted seedings");
+          
+          // Also update Firebase
+          try {
+            updatedUsers.forEach(async (user) => {
+              if (user.role === 'selector' && user.id) {
+                const userRef = ref(database, `users/${user.id}`);
+                await update(userRef, { votingHistory: user.votingHistory });
+              }
+            });
+          } catch (e) {
+            console.log("Couldn't update Firebase but localStorage was updated");
+          }
+          
+          return true;
+        } catch (error) {
+          console.error("Error bypassing seeding check:", error);
+          return false;
+        }
+      };
     
 
     // Add the getRoundDisplay function that was missing
@@ -389,6 +442,7 @@ function RoundControl() {
 
                         // Check if we're in the seeding phase and all selectors have submitted their seedings
                         if (eventState.phase === EVENT_PHASES.SEEDING) {
+                            bypassSeedingCheck();
                             // Get all selectors and their voting status
                             const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
                             const selectorUsers = users.filter(u => u.role === 'selector');
