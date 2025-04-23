@@ -81,6 +81,32 @@ class RealTimeService {
         }
       }, this.pollingDelay);
     }
+
+    startLocalStoragePolling() {
+      // Check every 3 seconds
+      setInterval(() => {
+        try {
+          // Check for changes in localStorage
+          const eventStateStr = localStorage.getItem('sailing_nationals_event_state');
+          
+          if (eventStateStr && this.lastEventState !== eventStateStr) {
+            const oldState = this.lastEventState ? JSON.parse(this.lastEventState) : {};
+            const newState = JSON.parse(eventStateStr);
+            
+            // Update stored state
+            this.lastEventState = eventStateStr;
+            
+            // Trigger update event
+            this.publish('state_updated', {
+              oldState,
+              newState
+            });
+          }
+        } catch (error) {
+          console.error("Error in localStorage polling:", error);
+        }
+      }, 3000);
+    }
   
     // Stop polling
     stopPolling() {

@@ -11,6 +11,9 @@ import ParliamentarianDashboard from './pages/Parliamentarian/ParliamentarianDas
 import Notification from './components/Notification';
 import AdminDashboard from './pages/Admin/AdminDashboard';
 import ErrorBoundary from './components/errorBoundary';
+import realTimeService from './utils/services/realTimeService';
+// Start local storage polling
+realTimeService.startLocalStoragePolling();
 
 function App() {
   return (
