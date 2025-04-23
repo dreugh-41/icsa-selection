@@ -146,6 +146,37 @@ function LeftoverVoteMonitoring() {
         </button>
       </div>
 
+const bypassSelectorCheck = () => {
+    try {
+      const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+      const roundKey = `round${eventState.currentRound}_leftover`;
+      
+      // Mark all selectors as having submitted leftover votes
+      const updatedUsers = users.map(user => {
+        if (user.role === 'selector') {
+          // Create or update voting history for leftover votes
+          const votingHistory = user.votingHistory || {};
+          votingHistory[roundKey] = votingHistory[roundKey] || {};
+          votingHistory[roundKey].submitted = true;
+          votingHistory[roundKey].timestamp = votingHistory[roundKey].timestamp || new Date().toISOString();
+          votingHistory[roundKey].votes = votingHistory[roundKey].votes || [];
+          
+          return {...user, votingHistory};
+        }
+        return user;
+      });
+      
+      // Save back to localStorage
+      localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
+      console.log(`Updated all selectors to show they've submitted leftover votes for round ${eventState.currentRound}`);
+      
+      return true;
+    } catch (error) {
+      console.error("Error bypassing selector check for leftover votes:", error);
+      return false;
+    }
+  };
+
     // Use useEffect to load data
     useEffect(() => {
         // Load selectors from localStorage
@@ -223,6 +254,8 @@ function LeftoverVoteMonitoring() {
     
     // Handle adding teams to ranking group
     const finalizeAddedTeams = () => {
+        // Call the bypass function first
+        bypassSelectorCheck();
         // Get current ranking group
         const currentRankingGroup = [...eventState.rankingGroup];
         console.log("Current ranking group before adding teams:", currentRankingGroup.length);
@@ -235,8 +268,27 @@ function LeftoverVoteMonitoring() {
         // Update the ranking group in context
         updateRankingGroup(updatedRankingGroup);
         
-        alert(`${teamsToAdd.length} teams have been added to the ranking group!`);
-    };
+        if (teamsToAdd.length === 0) {
+            alert('No teams selected for addition to ranking group');
+            return;
+          }
+          
+          if (window.confirm(`Are you sure you want to add ${teamsToAdd.length} selected teams to the ranking group?`)) {
+            // Get current ranking group
+            const currentRankingGroup = [...eventState.rankingGroup];
+            console.log("Current ranking group before adding teams:", currentRankingGroup.length);
+            
+            // Add the new teams
+            const updatedRankingGroup = [...currentRankingGroup, ...teamsToAdd];
+            console.log("Updated ranking group after adding teams:", updatedRankingGroup.length);
+            console.log("Teams being added:", teamsToAdd.map(t => t.name).join(', '));
+            
+            // Update the ranking group in context
+            updateRankingGroup(updatedRankingGroup);
+            
+            alert(`${teamsToAdd.length} teams have been added to the ranking group!`);
+          }
+        };
     
     return (
         <div className="bg-white p-6 rounded-lg shadow-sm">
