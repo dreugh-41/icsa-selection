@@ -279,7 +279,7 @@ function LockVoteMonitoring() {
     // Handle adding teams to ranking group
     const finalizeQualifiedTeams = () => {
         // First log what we're checking
-        console.log("Checking if all selectors have voted");
+        console.log("Checking selector votes");
         console.log("Current selectors state:", selectors);
         
         // Get a fresh copy of selector data directly from localStorage
@@ -300,11 +300,9 @@ function LockVoteMonitoring() {
           votes: s?.votingHistory?.round1?.lockVotes?.length || 0
         })));
         
-        // Use this direct check instead of relying on component state
-        const allSelectorsVoted = selectorsWithVotes.length === activeSelectorUsers.length;
-        
-        if (!allSelectorsVoted && activeSelectorUsers.length > 0) {
-          alert(`Not all selectors have submitted their votes (${selectorsWithVotes.length}/${activeSelectorUsers.length}). Please wait for all votes before advancing.`);
+        // Check if we have at least some votes (instead of requiring all selectors)
+        if (selectorsWithVotes.length === 0) {
+          alert('No selectors have submitted votes yet. Please wait for at least one selector to vote before proceeding.');
           return;
         }
         
@@ -314,7 +312,7 @@ function LockVoteMonitoring() {
           return;
         }
         
-        if (window.confirm(`Are you sure you want to qualify ${qualifyingTeams.length} teams based on lock votes?`)) {
+        if (window.confirm(`Are you sure you want to qualify ${qualifyingTeams.length} teams based on lock votes from ${selectorsWithVotes.length} selectors?`)) {
           // Convert qualifying teams to the right format for our state system
           const teamsToQualify = qualifyingTeams.map(team => {
             const originalTeam = eventState.teams.find(t => t.id === team.id);
