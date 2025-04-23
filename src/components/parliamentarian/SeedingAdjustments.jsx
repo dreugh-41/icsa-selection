@@ -48,47 +48,16 @@ function SeedingAdjustments() {
       !team.status.isAlternate && team.status.qualificationMethod !== 'ALTERNATE'
     );
     
-    // Load seeding data
-    const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
-    const selectorUsers = users.filter(u => u.role === 'selector' && u.votingHistory?.seeding?.submitted);
+    // Sort qualified teams by their averageSeed to maintain the seeding order
+    const sortedQualifiedTeams = [...qualifiedTeams].sort((a, b) => 
+      (a.averageSeed || 999) - (b.averageSeed || 999)
+    );
     
-    // Calculate average seedings
-    const teamSeedSums = {};
-    const teamSeedCounts = {};
+    console.log("Sorted qualified teams by average seed:", 
+      sortedQualifiedTeams.map((t, i) => `${i+1}. ${t.name} (${t.averageSeed || 'N/A'})`));
     
-    // Collect all seedings from selectors
-    selectorUsers.forEach(selector => {
-      const seedings = selector.votingHistory.seeding.rankings || [];
-      
-      seedings.forEach((teamId, index) => {
-        if (!teamSeedSums[teamId]) {
-          teamSeedSums[teamId] = 0;
-          teamSeedCounts[teamId] = 0;
-        }
-        
-        teamSeedSums[teamId] += (index + 1); // Add the rank (1-based)
-        teamSeedCounts[teamId]++;
-      });
-    });
-    
-    // Calculate average seed for each team
-    const teamsWithSeeding = qualifiedTeams.map(team => {
-      let averageSeed = null;
-      if (teamSeedSums[team.id] && teamSeedCounts[team.id]) {
-        averageSeed = Math.round(teamSeedSums[team.id] / teamSeedCounts[team.id]);
-      }
-      
-      return {
-        ...team,
-        averageSeed: averageSeed || 999 // Default high value if no seeding data
-      };
-    });
-    
-    // Sort by average seed
-    const sortedTeams = [...teamsWithSeeding].sort((a, b) => a.averageSeed - b.averageSeed);
-    
-    // Assign seeds 1-36 based on sorted order
-    const teamsWithAssignedSeeds = sortedTeams.map((team, index) => ({
+    // Now assign seeds 1-36 based on this sorted order
+    const teamsWithAssignedSeeds = sortedQualifiedTeams.map((team, index) => ({
       ...team,
       assignedSeed: index + 1 // 1-based seeding
     }));
