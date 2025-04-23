@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useEvent } from '../../contexts/EventContext';
 import { addLogEntry } from '../../utils/services/logService';
+import { ref, get } from 'firebase/database';
+import { database } from '../../firebase';
 
 function SeedingMonitoring() {
     const { eventState } = useEvent();
@@ -10,6 +12,147 @@ function SeedingMonitoring() {
     const [averageSeedings, setAverageSeedings] = useState([]);
     const [selectedTab, setSelectedTab] = useState('status'); // 'status', 'individual', or 'average'
     const {logSelectorRankings}=useEvent();
+
+    const refreshData = () => {
+        loadSelectorVotingStatus();
+        // Force re-render
+        setSelectedTab(selectedTab);
+      };
+
+      const processSeedings = (selectorUsers) => {
+        // Gather and process seedings
+        const allSeedings = [];
+        selectorUsers.forEach(selector => {
+          if (selector?.votingHistory?.seeding?.submitted) {
+            const selectorSeedings = selector.votingHistory.seeding.rankings || [];
+            
+            // Create a properly formatted seeding entry
+            allSeedings.push({
+              selectorId: selector.id,
+              selectorName: selector.name,
+              seedings: selectorSeedings.map((teamId, index) => {
+                const team = eventState.teams.find(t => t.id === teamId);
+                return {
+                  teamId,
+                  teamName: team ? team.name : 'Unknown Team',
+                  seed: index + 1
+                };
+              })
+            });
+          }
+        });
+        
+        setSelectorSeedings(allSeedings);
+        
+        // Calculate average seedings
+        if (allSeedings.length > 0) {
+          const teamSeedSums = {};
+          const teamSeedCounts = {};
+          const teamDetails = {};
+          
+          // Collect all seedings
+          allSeedings.forEach(selector => {
+            selector.seedings.forEach(seeding => {
+              if (!teamSeedSums[seeding.teamId]) {
+                teamSeedSums[seeding.teamId] = 0;
+                teamSeedCounts[seeding.teamId] = 0;
+                teamDetails[seeding.teamId] = {
+                  teamName: seeding.teamName,
+                  seedings: []
+                };
+              }
+              
+              teamSeedSums[seeding.teamId] += seeding.seed;
+              teamSeedCounts[seeding.teamId]++;
+              teamDetails[seeding.teamId].seedings.push(seeding.seed);
+            });
+          });
+          
+          // Calculate averages
+          const avgSeedings = Object.keys(teamSeedSums).map(teamId => ({
+            teamId,
+            teamName: teamDetails[teamId].teamName,
+            averageSeed: (teamSeedSums[teamId] / teamSeedCounts[teamId]).toFixed(2),
+            seedings: teamDetails[teamId].seedings
+          }));
+          
+          // Sort by average seed
+          const sortedSeedings = avgSeedings.sort((a, b) => 
+            parseFloat(a.averageSeed) - parseFloat(b.averageSeed)
+          );
+          
+          setAverageSeedings(sortedSeedings);
+        }
+      };
+    
+      const loadSelectorVotingStatus = async () => {
+        try {
+          console.log("SeedingMonitoring: Loading selector voting status from Firebase");
+          
+          // Try to get users from Firebase first
+          let selectorUsers = [];
+          try {
+            const usersSnapshot = await get(ref(database, 'users'));
+            if (usersSnapshot.exists()) {
+              const usersData = usersSnapshot.val();
+              
+              // Convert object to array and filter for selectors
+              selectorUsers = Object.values(usersData)
+                .filter(u => u && u.role === 'selector' && u.isActive !== false);
+              
+              console.log("Found selectors in Firebase:", selectorUsers.length);
+            } else {
+              console.log("No users found in Firebase");
+            }
+          } catch (firebaseError) {
+            console.error("Error reading from Firebase:", firebaseError);
+          }
+          
+          // If we didn't get selectors from Firebase, use localStorage as backup
+          if (selectorUsers.length === 0) {
+            console.log("Using localStorage for selector data");
+            const allUsers = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+            selectorUsers = allUsers.filter(u => u && u.role === 'selector' && u.isActive !== false);
+          }
+          
+          // Create selector status objects
+          const selectorStatus = selectorUsers.map(selector => {
+            // Check if this selector has submitted seedings
+            const hasSubmitted = selector?.votingHistory?.seeding?.submitted || false;
+            const timestamp = selector?.votingHistory?.seeding?.timestamp || null;
+            
+            console.log(`Selector ${selector.name}: seeding submitted=${hasSubmitted}, timestamp=${timestamp}`);
+            
+            return {
+              id: selector.id,
+              name: selector.name,
+              hasSubmitted: hasSubmitted,
+              timestamp: timestamp
+            };
+          });
+          
+          setSelectors(selectorStatus);
+          
+          // Process seedings if there are submitted ones
+          processSeedings(selectorUsers);
+          
+        } catch (error) {
+          console.error("Error loading selector voting status:", error);
+        }
+      };
+      
+      // Add this to your useEffect
+      useEffect(() => {
+        loadSelectorVotingStatus();
+        
+        // Set up auto-refresh
+        const refreshInterval = setInterval(() => {
+          loadSelectorVotingStatus();
+        }, 10000); // Every 10 seconds
+        
+        return () => clearInterval(refreshInterval);
+      }, [eventState.teams]);
+      
 
     // Add useEffect to log seeding rankings
     useEffect(() => {
