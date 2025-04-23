@@ -15,6 +15,7 @@ import CompletionSummary from '../../components/CompletionSummary';
 import ProcessSelection from '../../components/parliamentarian/ProcessSelection';
 import SeedingAdjustments from '../../components/parliamentarian/SeedingAdjustments';
 import { safeGet, safeArrayLength } from '../../utils/safeFetch';
+import FirebaseDebugger from '../components/debug/FirebaseDebugger';
 
 function ParliamentarianDashboard() {
   const { eventState, loading } = useEvent();
@@ -162,6 +163,8 @@ function ParliamentarianDashboard() {
                 Remaining Berths: {remainingBerths}
               </p>
             </div>
+
+            <FirebaseDebugger />
             
             {/* Display pending qualified teams */}
             {safeArrayLength(pendingQualifiedTeams) > 0 && (

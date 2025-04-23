@@ -30,45 +30,49 @@ function LockVoteMonitoring() {
     // Separated loading logic to a function for reuse
     const loadData = () => {
         try {
-            setLoading(true);
-            console.log("LockVoteMonitoring: Loading data from localStorage");
+          setLoading(true);
+          console.log("LockVoteMonitoring: Loading data from localStorage ONLY");
+          
+          // ONLY use localStorage data - ignore Firebase
+          const allUsers = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+          console.log("Found users in localStorage:", allUsers.length);
+          
+          const selectorUsers = allUsers.filter(u => u && u.role === 'selector');
+          console.log("Found selectors:", selectorUsers.length);
+          
+          // Detailed logging of each selector
+          selectorUsers.forEach(selector => {
+            const hasVoted = selector?.votingHistory?.round1?.submitted || false;
+            console.log(`Selector ${selector.name}: ${hasVoted ? 'HAS' : 'has NOT'} submitted votes`);
+            if (hasVoted) {
+              console.log(`  Vote count: ${selector?.votingHistory?.round1?.lockVotes?.length || 0}`);
+              console.log(`  Timestamp: ${selector?.votingHistory?.round1?.timestamp}`);
+            }
+          });
+          
+          // Get selector status
+          const selectorStatus = selectorUsers.map(selector => {
+            const hasVoted = selector?.votingHistory?.round1?.submitted || false;
+            const timestamp = selector?.votingHistory?.round1?.timestamp || null;
             
-            // Load all users to check voting status
-            const allUsers = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
-            console.log("Found users:", allUsers.length);
-            
-            const selectorUsers = allUsers.filter(u => u && u.role === 'selector');
-            console.log("Found selectors:", selectorUsers.length);
-            
-            // Get selector status with detailed logging
-            const selectorStatus = selectorUsers.map(selector => {
-                const hasVoted = selector && selector.votingHistory && 
-                             selector.votingHistory.round1 && 
-                             selector.votingHistory.round1.submitted || false;
-                const timestamp = selector && selector.votingHistory && 
-                              selector.votingHistory.round1 && 
-                              selector.votingHistory.round1.timestamp || null;
-                
-                console.log(`Selector ${selector.name}: voted=${hasVoted}, timestamp=${timestamp}`);
-                
-                return {
-                    id: selector.id,
-                    name: selector.name, 
-                    hasVoted,
-                    timestamp
-                };
-            });
-            
-            setSelectors(selectorStatus);
-            
-            // Rest of your existing code for counting votes and determining qualifying teams...
-            
-            setLoading(false);
+            return {
+              id: selector.id,
+              name: selector.name, 
+              hasVoted,
+              timestamp
+            };
+          });
+          
+          setSelectors(selectorStatus);
+          
+          // Continue with the rest of your function...
+          
+          setLoading(false);
         } catch (error) {
-            console.error("Error loading vote data:", error);
-            setLoading(false);
+          console.error("Error loading vote data:", error);
+          setLoading(false);
         }
-    };
+      };
 
     // Use useEffect to load data
     useEffect(() => {
@@ -86,6 +90,8 @@ function LockVoteMonitoring() {
     
     // Handle adding teams to ranking group
     const finalizeQualifiedTeams = () => {
+        console.log("DEBUG: Current selectors state:", selectors);
+        console.log("DEBUG: Current teamVotes state:", teamVotes);
         // Convert qualifying teams to the right format for our state system
         const teamsToQualify = qualifyingTeams.map(team => {
             const originalTeam = eventState.teams.find(t => t.id === team.id);
