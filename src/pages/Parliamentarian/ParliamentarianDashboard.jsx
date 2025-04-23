@@ -51,37 +51,7 @@ function ParliamentarianDashboard() {
     );
   }
 
-  const [debugInfo, setDebugInfo] = useState({
-    localStorageUsers: [],
-    selectorsWithVotes: 0,
-    lastRefresh: new Date().toLocaleTimeString()
-  });
-
-  const loadData = () => {
-    try {
-      setLoading(true);
-      console.log("LockVoteMonitoring: Loading data from localStorage");
-      
-      // Load all users to check voting status
-      const allUsers = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
-      console.log("Found users:", allUsers.length);
-      
-      const selectorUsers = allUsers.filter(u => u && u.role === 'selector');
-      console.log("Found selectors:", selectorUsers.length);
-      
-      // Update debug info
-      setDebugInfo({
-        localStorageUsers: allUsers.length,
-        selectorsWithVotes: selectorUsers.filter(s => s?.votingHistory?.round1?.submitted).length,
-        lastRefresh: new Date().toLocaleTimeString()
-      });
-      
-      // Rest of your existing loadData function...
-    } catch (error) {
-      console.error("Error loading vote data:", error);
-      setLoading(false);
-    }
-  };
+  
 
     // Helper function to determine what component to show based on the current phase
     const renderPhaseComponent = () => {
@@ -194,8 +164,6 @@ function ParliamentarianDashboard() {
                 Remaining Berths: {remainingBerths}
               </p>
             </div>
-
-            <FirebaseDebugger />
             
             {/* Display pending qualified teams */}
             {safeArrayLength(pendingQualifiedTeams) > 0 && (
