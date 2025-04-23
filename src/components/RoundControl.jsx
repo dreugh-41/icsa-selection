@@ -70,10 +70,7 @@ function RoundControl() {
             updatedUsers.forEach(async (user) => {
               if (user.role === 'selector' && user.id) {
                 const userRef = ref(database, `users/${user.id}`);
-                const update = { 
-                  votingHistory: user.votingHistory 
-                };
-                set(userRef, update);
+                update(userRef, { votingHistory: user.votingHistory });
               }
             });
           } catch (e) {
@@ -382,7 +379,7 @@ function RoundControl() {
                         
                         // Check if the leftover voting phase has been completed properly
                         if (eventState.phase === EVENT_PHASES.ROUND_LEFTOVER) {
-                            //bypassLeftoverCheck();
+                            bypassLeftoverCheck();
                             bypassSelectorCheck()
                             // Get all selectors and their voting status
                             const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
