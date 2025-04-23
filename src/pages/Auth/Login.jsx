@@ -14,21 +14,24 @@ function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    console.log("Login attempt with:", email);
   
     try {
       const result = await login(email, password);
-      console.log("Login result:", result);
-        
+      
       if (result.success) {
-        console.log("Login successful, redirecting...");
+        // Explicitly redirect based on the role returned by the login function
+        if (result.userData && result.userData.role) {
+          console.log("Redirecting to:", `/${result.userData.role}`);
+          navigate(`/${result.userData.role}`);
+        } else {
+          // Default redirection
+          navigate('/selector');
+        }
       } else {
         setError(result.error || 'Failed to log in');
-        console.error("Login failed:", result.error);
       }
     } catch (error) {
-      console.error("Error during login:", error);
-      setError('An error occurred during login: ' + error.message);
+      setError('An error occurred during login');
     }
   };
 

@@ -39,6 +39,7 @@ export function AuthProvider({ children }) {
             id: firebaseUser.uid,
           };
           setUser(userWithAppData);
+          console.log("User authenticated and loaded:", userWithAppData.role);
         } else {
           // Just use Firebase user data
           setUser({
@@ -90,17 +91,22 @@ export function AuthProvider({ children }) {
   };
 
   // Handle user login
-  const login = async (email, password) => {
-    try {
-      console.log("Login requested for:", email);
-      const user = await loginUser(email, password);
-      console.log("Login successful, user data:", user);
-      return { success: true, user };
-    } catch (error) {
-      console.error("Login error in context:", error);
-      return { success: false, error: error.message };
-    }
-  };
+  // Handle user login
+const login = async (email, password) => {
+  try {
+    console.log("Login requested for:", email);
+    const userCredential = await loginUser(email, password);
+    
+    // Get all users to find the matching one by email
+    const usersData = await getUsers();
+    const appUser = usersData ? Object.values(usersData).find(u => u.email === email) : null;
+    
+    // Return success with user data
+    return { success: true, userData: appUser };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+};
 
   // Handle user logout
   const logout = async () => {
