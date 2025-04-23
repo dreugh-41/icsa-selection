@@ -8,14 +8,19 @@ const DEBOUNCE_TIME = 3000; // 3 seconds
 // Save event state to Firebase
 export const saveEventState = async (eventState) => {
     try {
-      // Save to Firebase first
+      // Save ONLY to the eventState path in Firebase
       console.log("Saving event state to Firebase...");
+      
+      // Use this path to ONLY update event state
       await set(ref(database, 'eventState'), eventState);
+      
+      // Do NOT use this which would overwrite everything:
+      // await set(ref(database), { eventState: eventState }); 
+      
       console.log("Successfully saved event state to Firebase");
       
-      // Only after successful Firebase save, update localStorage as backup
+      // Backup to localStorage
       localStorage.setItem('sailing_nationals_event_state', JSON.stringify(eventState));
-      console.log("Saved to localStorage as backup");
       
       return true;
     } catch (error) {
