@@ -8,6 +8,8 @@ function LockVoting() {
     const { eventState } = useEvent();
     const { user, updateUser } = useAuth();
     
+    console.log("LockVoting - User data:", user);
+    
     // Initialize from user's voting history if it exists
     const [selectedLocks, setSelectedLocks] = useState(() => {
         const savedVotes = safeGet(user, 'votingHistory.round1.lockVotes', []);
@@ -37,6 +39,53 @@ function LockVoting() {
     const sortedTeams = [...(safeGet(eventState, 'teams', []))].sort((a, b) => 
         a.name.localeCompare(b.name)
     );
+
+    const resetSubmission = () => {
+        try {
+            if (!user) {
+                console.error("No user available");
+                return;
+            }
+            
+            // Create updated user with voting history reset
+            const updatedUser = {
+                ...user,
+                votingHistory: {
+                    ...(user.votingHistory || {}),
+                    round1: {
+                        ...(user.votingHistory?.round1 || {}),
+                        submitted: false
+                    }
+                }
+            };
+            
+            // Update the user
+            updateUser(updatedUser);
+            
+            // Reset local state
+            setIsSubmitted(false);
+            
+            console.log("Submission status reset");
+        } catch (error) {
+            console.error("Error resetting submission:", error);
+            alert("An error occurred while resetting your submission status.");
+        }
+    };
+    
+    // Add a button to the UI when votes are submitted
+    {isSubmitted && (
+        <div className="mt-4 text-center">
+            <button
+                onClick={resetSubmission}
+                className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700"
+            >
+                Reset Submission Status
+            </button>
+            <p className="mt-2 text-sm text-gray-600">
+                Note: This will allow you to change your votes.
+            </p>
+        </div>
+    )}
 
     // Handle selecting/deselecting a team for lock voting
     const toggleTeamSelection = (teamId) => {

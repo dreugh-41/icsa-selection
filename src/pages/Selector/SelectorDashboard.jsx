@@ -10,11 +10,48 @@ import TeamSeeding from './TeamSeeding';
 import CompletionSummary from '../../components/CompletionSummary';
 import SeedingAdjustments from '../../components/parliamentarian/SeedingAdjustments';
 import { safeGet, safeArrayLength } from '../../utils/safeFetch';
+import { useAuth } from '../../contexts/AuthContext';
 
 function SelectorDashboard() {
     const { eventState, loading } = useEvent();
     const [forceUpdate, setForceUpdate] = useState(false);
     const [hasError, setHasError] = useState(false);
+    const { user } = useAuth();
+
+    const debugLocalStorage = () => {
+        try {
+            if (!user) {
+                console.log("No user available in auth context");
+                return null;
+            }
+            
+            const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+            const currentUser = users.find(u => u.id === user.id);
+            
+            console.log("Current user from localStorage:", currentUser);
+            console.log("Current user voting history:", currentUser?.votingHistory);
+            
+            if (currentUser?.votingHistory?.round1) {
+                console.log("Round 1 votes:", {
+                    submitted: currentUser.votingHistory.round1.submitted,
+                    timestamp: currentUser.votingHistory.round1.timestamp,
+                    lockVotes: currentUser.votingHistory.round1.lockVotes
+                });
+            } else {
+                console.log("No round 1 voting history found");
+            }
+            
+            return currentUser;
+        } catch (error) {
+            console.error("Error accessing localStorage:", error);
+            return null;
+        }
+    };
+    
+    // Call this function when the component mounts
+    useEffect(() => {
+        debugLocalStorage();
+    }, [user]);
   
     useEffect(() => {
       try {
@@ -113,6 +150,8 @@ function SelectorDashboard() {
             };
             return phaseDisplays[eventState.phase] || 'Unknown Phase';
         };
+
+        
 
     // Display information about qualified teams
     const renderQualifiedTeamsInfo = () => {
