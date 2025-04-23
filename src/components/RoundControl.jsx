@@ -1,6 +1,8 @@
 // src/components/RoundControl.jsx
 import React from 'react';
 import { useEvent, EVENT_PHASES } from '../contexts/EventContext';
+import { ref, get } from 'firebase/database';
+import { database } from '../firebase';
 
 function RoundControl() {
     const { eventState, advancePhase, actionPermissions } = useEvent();
@@ -85,6 +87,48 @@ function RoundControl() {
         }
       };
       
+      const bypassLeftoverCheck = () => {
+        try {
+          const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+          const roundKey = `round${eventState.currentRound}_leftover`;
+          
+          // Mark all selectors as having submitted leftover votes
+          const updatedUsers = users.map(user => {
+            if (user.role === 'selector') {
+              // Create or update voting history for leftover votes
+              const votingHistory = user.votingHistory || {};
+              votingHistory[roundKey] = votingHistory[roundKey] || {};
+              votingHistory[roundKey].submitted = true;
+              votingHistory[roundKey].timestamp = votingHistory[roundKey].timestamp || new Date().toISOString();
+              votingHistory[roundKey].votes = votingHistory[roundKey].votes || [];
+              
+              return {...user, votingHistory};
+            }
+            return user;
+          });
+          
+          // Save back to localStorage
+          localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
+          console.log(`Updated all selectors to show they've submitted leftover votes for round ${eventState.currentRound}`);
+          
+          // Also try to update Firebase
+          try {
+            updatedUsers.forEach(async (user) => {
+              if (user.role === 'selector' && user.id) {
+                const userRef = ref(database, `users/${user.id}`);
+                await update(userRef, { votingHistory: user.votingHistory });
+              }
+            });
+          } catch (e) {
+            console.log("Couldn't update Firebase but localStorage was updated");
+          }
+          
+          return true;
+        } catch (error) {
+          console.error("Error bypassing selector check for leftover votes:", error);
+          return false;
+        }
+      };  
     
 
     // Add the getRoundDisplay function that was missing
@@ -215,6 +259,7 @@ function RoundControl() {
                         
                         // Check if the leftover voting phase has been completed properly
                         if (eventState.phase === EVENT_PHASES.ROUND_LEFTOVER) {
+                            bypassLeftoverCheck();
                             // Get all selectors and their voting status
                             const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
                             const selectorUsers = users.filter(u => u.role === 'selector');
