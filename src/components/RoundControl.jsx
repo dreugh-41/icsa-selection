@@ -373,6 +373,7 @@ function RoundControl() {
                         
                         // Check if there are pending lock votes that need to be finalized
                         if (eventState.phase === EVENT_PHASES.ROUND1_LOCK) {
+                            bypassSelectorCheck();
                             // First check if all selectors have submitted their votes
                             const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
                             const selectorUsers = users.filter(u => u.role === 'selector');
