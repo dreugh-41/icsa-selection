@@ -41,9 +41,12 @@ function Round1Management() {
             return;
         }
         
-        // Add null check for eventState.teams
-        const qualifiedTeams = (Array.isArray(eventState.teams) ? eventState.teams : [])
-            .filter(team => selectedTeams.has(team.id))
+        // Safely access eventState.teams with null checks
+        const teamsArray = Array.isArray(eventState?.teams) ? eventState.teams : [];
+        
+        // Make sure we don't call filter on undefined
+        const qualifiedTeams = teamsArray
+            .filter(team => team && selectedTeams.has(team.id))
             .map(team => ({
                 ...team,
                 status: {
@@ -54,6 +57,8 @@ function Round1Management() {
                     qualificationRound: 1
                 }
             }));
+        
+        console.log("Creating AQ teams:", qualifiedTeams.length);
         
         // This will now set them as pending qualified teams
         qualifyTeams(qualifiedTeams);
