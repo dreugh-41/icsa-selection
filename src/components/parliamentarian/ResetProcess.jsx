@@ -7,43 +7,33 @@ function ResetProcess() {
   const [showConfirmation, setShowConfirmation] = useState(false);
   
   const handleReset = () => {
-    try {
-      console.log("Reset process initiated");
-      
-      // First, clear all selector voting history from localStorage
-      const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
-      
-      // Reset voting history for all selectors
-      const updatedUsers = users.map(user => {
-        if (user.role === 'selector') {
-          return {
-            ...user,
-            votingHistory: {} // Clear all voting history
-          };
-        }
-        return user;
-      });
-      
-      // Save the updated users back to localStorage
-      localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
-      
-      // Clear any existing event state in localStorage
-      localStorage.removeItem('sailing_nationals_event_state');
-      
-      // Now reset the event state
-      resetEventState();
-      
-      // Force page reload after a brief delay
-      setTimeout(() => {
-        window.location.reload();
-      }, 500);
-      
-      setShowConfirmation(false);
-    } catch (error) {
-      console.error("Error in reset process:", error);
-      alert("An error occurred during reset: " + error.message);
-      setShowConfirmation(false);
-    }
+    console.log("Reset process initiated");
+    
+    // First, clear localStorage directly
+    localStorage.removeItem('sailing_nationals_event_state');
+    
+    // Clear selector voting history
+    const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+    const updatedUsers = users.map(user => {
+      if (user.role === 'selector') {
+        return {
+          ...user,
+          votingHistory: {} // Clear all voting history
+        };
+      }
+      return user;
+    });
+    localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
+    
+    // Now call the context function
+    resetEventState();
+    
+    // Add a delay then force refresh the page
+    setTimeout(() => {
+      window.location.reload();
+    }, 1000);
+    
+    setShowConfirmation(false);
   };
 
   return (

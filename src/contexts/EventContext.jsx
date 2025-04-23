@@ -50,26 +50,21 @@ export function EventProvider({ children }) {
     // Initialize from Firebase
     const initializeData = async () => {
       try {
+        // First try localStorage
+        const localState = localStorage.getItem('sailing_nationals_event_state');
+        if (localState) {
+          const parsedState = JSON.parse(localState);
+          console.log('Loaded event state from localStorage');
+          setEventState(parsedState);
+          setLoading(false);
+          return;
+        }
+        
+        // If not in localStorage, try Firebase
         const savedState = await getEventState();
         if (savedState) {
           console.log('Loaded saved event state from Firebase');
-          // Ensure all required properties exist
-          const completeState = {
-            phase: EVENT_PHASES.PRESELECTION,
-            currentRound: 0,
-            qualifiedTeams: [],
-            pendingQualifiedTeams: [],
-            remainingBerths: 36,
-            teams: [],
-            rankingGroup: [],
-            roundHistory: {},
-            selectionType: null,
-            alternateCount: 0,
-            teamsToQualifyThisRound: null,
-            ...savedState // Override defaults with saved data
-          };
-          
-          setEventState(completeState);
+          setEventState(savedState);
         }
         setLoading(false);
       } catch (error) {
@@ -95,15 +90,20 @@ export function EventProvider({ children }) {
   // Save state to Firebase whenever it changes
   useEffect(() => {
     if (!loading) {
-      console.log("Saving event state to Firebase with ranking group size:", eventState.rankingGroup?.length || 0);
-      saveEventState(eventState).catch(err => {
-        console.error('Error saving event state:', err);
-        // Still save to localStorage as a fallback
-        localStorage.setItem('sailing_nationals_event_state', JSON.stringify(eventState));
-      });
+      console.log("Saving event state to localStorage");
       
-      // Always save to localStorage regardless of Firebase success
-      localStorage.setItem('sailing_nationals_event_state', JSON.stringify(eventState));
+      try {
+        // Always save to localStorage first
+        localStorage.setItem('sailing_nationals_event_state', JSON.stringify(eventState));
+        
+        // Try Firebase but don't worry if it fails
+        saveEventState(eventState).catch(err => {
+          console.error('Error saving event state to Firebase:', err);
+          // This is fine - we're already using localStorage
+        });
+      } catch (error) {
+        console.error("Error saving state:", error);
+      }
     }
   }, [eventState, loading]);
 
@@ -122,7 +122,7 @@ export function EventProvider({ children }) {
   const resetEventState = () => {
     console.log("Resetting event state completely");
     
-    // Set to initial state
+    // Define initial state
     const initialState = {
       phase: EVENT_PHASES.PRESELECTION,
       currentRound: 0,
@@ -137,13 +137,14 @@ export function EventProvider({ children }) {
       teamsToQualifyThisRound: null
     };
     
-    // Update local state
+    // Update state
     setEventState(initialState);
     
     // Clear localStorage
     localStorage.removeItem('sailing_nationals_event_state');
     
     console.log("Event state reset complete");
+    
     return true;
   };
 
