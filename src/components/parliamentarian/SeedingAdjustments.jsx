@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useEvent } from '../../contexts/EventContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { ref, get } from 'firebase/database';
+import { ref, get, set, onValue } from 'firebase/database';
 import { database } from '../../firebase';
 
 function SeedingAdjustments() {
@@ -11,6 +11,7 @@ function SeedingAdjustments() {
   const [eastTeams, setEastTeams] = useState([]);
   const [westTeams, setWestTeams] = useState([]);
   const [initializedTeams, setInitializedTeams] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState(null);
 
   // Define the seed numbers for East division
   const eastSeeds = [1, 4, 5, 8, 9, 12, 13, 16, 17, 20, 21, 24, 25, 28, 29, 32, 33, 36];
@@ -141,13 +142,21 @@ function SeedingAdjustments() {
     setEastTeams(updatedEastTeams);
     setWestTeams(updatedWestTeams);
     
-    // Save the updated divisions to localStorage
+    // Save to Firebase immediately for real-time updates
     if (user.role === 'parliamentarian') {
-      saveAdjustmentsToStorage(updatedEastTeams, updatedWestTeams);
+      const adjustments = {
+        east: updatedEastTeams,
+        west: updatedWestTeams,
+        timestamp: new Date().toISOString()
+      };
+      
+      const adjustmentsRef = ref(database, 'seedingAdjustments');
+      set(adjustmentsRef, adjustments)
+        .then(() => console.log("Move to West saved to Firebase"))
+        .catch(err => console.error("Error saving move to Firebase:", err));
     }
   };
-
-  // Function to move team from West to East
+  
   const moveToEast = (team) => {
     if (user.role !== 'parliamentarian') return;
     
@@ -157,9 +166,18 @@ function SeedingAdjustments() {
     setWestTeams(updatedWestTeams);
     setEastTeams(updatedEastTeams);
     
-    // Save the updated divisions to localStorage
+    // Save to Firebase immediately for real-time updates
     if (user.role === 'parliamentarian') {
-      saveAdjustmentsToStorage(updatedEastTeams, updatedWestTeams);
+      const adjustments = {
+        east: updatedEastTeams,
+        west: updatedWestTeams,
+        timestamp: new Date().toISOString()
+      };
+      
+      const adjustmentsRef = ref(database, 'seedingAdjustments');
+      set(adjustmentsRef, adjustments)
+        .then(() => console.log("Move to East saved to Firebase"))
+        .catch(err => console.error("Error saving move to Firebase:", err));
     }
   };
 
@@ -168,32 +186,65 @@ function SeedingAdjustments() {
     if (user.role !== 'parliamentarian') return;
     
     try {
-      // Prepare adjustments data
+      // Prepare adjustments data with current timestamp
       const adjustments = {
         east: eastTeams,
         west: westTeams,
         timestamp: new Date().toISOString()
       };
       
-      // Save to localStorage
-      localStorage.setItem('sailing_nationals_seeding_adjustments', JSON.stringify(adjustments));
-      
-      // Also save to Firebase for better synchronization
-      try {
-        // Save to Firebase
-        const adjustmentsRef = ref(database, 'seedingAdjustments');
-        set(adjustmentsRef, adjustments);
-        console.log("Saved seeding adjustments to Firebase");
-      } catch (firebaseError) {
-        console.error("Error saving to Firebase:", firebaseError);
-      }
-      
-      alert('Seeding adjustments have been saved successfully!');
+      // Save to Firebase first
+      const adjustmentsRef = ref(database, 'seedingAdjustments');
+      set(adjustmentsRef, adjustments)
+        .then(() => {
+          console.log("Successfully saved seeding adjustments to Firebase");
+          
+          // Also save to localStorage as backup
+          localStorage.setItem('sailing_nationals_seeding_adjustments', JSON.stringify(adjustments));
+          
+          alert('Seeding adjustments have been saved successfully!');
+        })
+        .catch((error) => {
+          console.error("Firebase error:", error);
+          
+          // Still save to localStorage even if Firebase fails
+          localStorage.setItem('sailing_nationals_seeding_adjustments', JSON.stringify(adjustments));
+          
+          alert('Adjustments saved to localStorage, but there was an error saving to Firebase.');
+        });
     } catch (error) {
       console.error("Error saving seeding adjustments:", error);
       alert("There was an error saving the adjustments");
     }
   };
+
+  useEffect(() => {
+    // Set up listener for real-time Firebase updates
+    const adjustmentsRef = ref(database, 'seedingAdjustments');
+    const unsubscribe = onValue(adjustmentsRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const adjustments = snapshot.val();
+        console.log("Real-time update: Seeding adjustments changed in Firebase");
+        
+        // Only update if timestamp is newer than what we have
+        const currentTimestamp = localStorage.getItem('seeding_last_update');
+        if (!currentTimestamp || adjustments.timestamp > currentTimestamp) {
+          // Update the teams
+          setEastTeams(adjustments.east || []);
+          setWestTeams(adjustments.west || []);
+          
+          // Update last change time
+          setLastUpdate(new Date(adjustments.timestamp).toLocaleTimeString());
+          
+          // Save the timestamp
+          localStorage.setItem('seeding_last_update', adjustments.timestamp);
+        }
+      }
+    });
+    
+    // Clean up listener on unmount
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     // Check Firebase for seeding adjustments
@@ -282,6 +333,14 @@ function SeedingAdjustments() {
             " The parliamentarian can adjust which division each team belongs to."}
         </p>
       </div>
+
+      {user.role !== 'parliamentarian' && lastUpdate && (
+        <div className="mb-4 bg-blue-50 p-3 rounded-lg text-center">
+            <p className="text-blue-700">
+            Seeding adjustments updated by parliamentarian at {lastUpdate}
+            </p>
+        </div>
+        )}
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* East Division */}
