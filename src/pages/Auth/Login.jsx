@@ -4,36 +4,25 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
 function Login() {
-  // These state variables will store the user's input
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   
-  // We'll use these hooks to handle authentication and navigation
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  // This function handles the form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
     try {
-      // Attempt to log in with provided credentials
       const result = await login(email, password);
       
       if (result.success) {
-        // Determine which dashboard to navigate to based on email
-        // Later, this will use the actual user role from authentication
-        if (email.includes('selector')) {
-          navigate('/selector');
-        } else if (email.includes('parliamentarian')) {
-          navigate('/parliamentarian');
-        } else {
-          navigate('/admin');
-        }
+        // Redirect to appropriate dashboard based on user role
+        // This will happen automatically in the AuthContext when the user state updates
       } else {
-        setError('Failed to log in');
+        setError(result.error || 'Failed to log in');
       }
     } catch (error) {
       setError('An error occurred during login');
@@ -98,6 +87,12 @@ function Login() {
             >
               Sign in
             </button>
+          </div>
+          
+          <div className="text-center">
+            <a href="/register" className="text-blue-600 hover:text-blue-800">
+              Need an account? Register
+            </a>
           </div>
         </form>
       </div>

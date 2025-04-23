@@ -1,10 +1,11 @@
 // src/App.jsx
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
-import { EventProvider } from './contexts/EventContext';  // Add this import
+import { EventProvider } from './contexts/EventContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import AuthenticatedLayout from './components/AuthenticatedLayout';
 import Login from './pages/Auth/Login';
+import Register from './pages/Auth/Register'; // Add this
 import SelectorDashboard from './pages/Selector/SelectorDashboard';
 import ParliamentarianDashboard from './pages/Parliamentarian/ParliamentarianDashboard';
 import Notification from './components/Notification';
@@ -13,11 +14,13 @@ import AdminDashboard from './pages/Admin/AdminDashboard';
 function App() {
   return (
     <AuthProvider>
-      <EventProvider>  {/* Add this wrapper */}
+      <EventProvider>
         <Router>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} /> {/* Add this line */}
             
+            {/* Keep your existing routes */}
             <Route 
               path="/selector" 
               element={

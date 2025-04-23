@@ -1,101 +1,120 @@
 // src/contexts/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { saveUsers, loadUsers } from '../utils/services/storageService';
+import { 
+  registerUser, 
+  loginUser, 
+  logoutUser, 
+  onAuthChange 
+} from '../services/authService';
+import {
+  getUsers,
+  saveUsers,
+  onUsersChange,
+  saveUserVotingHistory
+} from '../services/databaseService';
 
 // Create the context
 const AuthContext = createContext(null);
 
-// Mock user data - in a real app, this would come from a database
-const mockUsers = [
-  { id: 'admin1', name: 'Admin User', email: 'admin@example.com', password: 'password', role: 'admin', isActive: true },
-  { id: 'parl1', name: 'Parliamentarian User', email: 'parliamentarian@example.com', password: 'password', role: 'parliamentarian', isActive: true },
-  { id: 'sel1', name: 'John Davis', email: 'selector1@example.com', password: 'password', role: 'selector', isActive: true },
-  { id: 'sel2', name: 'Sarah Johnson', email: 'selector2@example.com', password: 'password', role: 'selector', isActive: true },
-  { id: 'sel3', name: 'Michael Chen', email: 'selector3@example.com', password: 'password', role: 'selector', isActive: true },
-  { id: 'sel4', name: 'Emma Wilson', email: 'selector4@example.com', password: 'password', role: 'selector', isActive: true },
-  { id: 'sel5', name: 'Robert Martinez', email: 'selector5@example.com', password: 'password', role: 'selector', isActive: true },
-];
-
 export function AuthProvider({ children }) {
-  // Initialize users if none exist
-  useEffect(() => {
-    const existingUsers = loadUsers();
-    if (!existingUsers) {
-      saveUsers(mockUsers);
-    }
-  }, []);
+  const [user, setUser] = useState(null);
+  const [allUsers, setAllUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Load user from localStorage or set to null if not logged in
-  const [user, setUser] = useState(() => {
-    const savedUser = sessionStorage.getItem('current_user');
-    return savedUser ? JSON.parse(savedUser) : null;
-  });
+  // Load users and set up listeners on component mount
+  useEffect(() => {
+    // Set up auth state listener
+    const unsubscribeAuth = onAuthChange(async (firebaseUser) => {
+      if (firebaseUser) {
+        // Get users from database
+        const usersData = await getUsers();
+        
+        // Find the matching user in our app data
+        const appUser = usersData ? Object.values(usersData).find(u => u.email === firebaseUser.email) : null;
+        
+        if (appUser) {
+          // Update user with extra app data
+          const userWithAppData = {
+            ...appUser,
+            id: firebaseUser.uid,
+          };
+          setUser(userWithAppData);
+        } else {
+          // Just use Firebase user data
+          setUser({
+            id: firebaseUser.uid,
+            email: firebaseUser.email,
+            name: firebaseUser.displayName || firebaseUser.email.split('@')[0],
+            role: 'selector', // Default role
+            isActive: true,
+            votingHistory: {}
+          });
+        }
+      } else {
+        setUser(null);
+      }
+      setLoading(false);
+    });
+    
+    // Set up user data listener
+    const unsubscribeUsers = onUsersChange((usersData) => {
+      if (usersData) {
+        setAllUsers(Object.values(usersData));
+      }
+    });
+    
+    // Clean up listeners on unmount
+    return () => {
+      unsubscribeAuth();
+      unsubscribeUsers();
+    };
+  }, []);
 
   // This function will handle updating user data
   const updateUser = (updatedUser) => {
     // Update the user in state
     setUser(updatedUser);
     
-    // Save current user to localStorage
-    localStorage.setItem('current_user', JSON.stringify(updatedUser));
+    // Update the users list
+    const updatedUsers = allUsers.map(u => 
+      u.id === updatedUser.id ? updatedUser : u
+    );
     
-    // Update the user in the users array
-    const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
-    const userIndex = users.findIndex(u => u.id === updatedUser.id);
+    // Save to Firebase
+    saveUsers(updatedUsers);
     
-    if (userIndex !== -1) {
-      // Make sure we preserve the password since it's removed from the current user object
-      const originalPassword = users[userIndex].password;
-      users[userIndex] = {
-        ...updatedUser,
-        password: originalPassword
-      };
-      
-      // Save the updated users array
-      localStorage.setItem('sailing_nationals_users', JSON.stringify(users));
+    // Save specific voting history updates
+    if (updatedUser.votingHistory) {
+      saveUserVotingHistory(updatedUser.id, updatedUser.votingHistory);
     }
   };
 
-  // This function will handle user login
+  // Handle user login
   const login = async (email, password) => {
     try {
-      // Load users from storage
-      const users = loadUsers() || mockUsers;
-      
-      // Find user with matching email and password
-      const foundUser = users.find(u => 
-        u.email === email && u.password === password && u.isActive
-      );
-      
-      if (foundUser) {
-        // Ensure the user has a votingHistory object
-        foundUser.votingHistory = foundUser.votingHistory || {};
-        
-        // Create a safe user object without the password
-        const safeUser = { ...foundUser };
-        delete safeUser.password;
-        
-        // Save to state and localStorage
-        setUser(safeUser);
-        sessionStorage.setItem('current_user', JSON.stringify(safeUser));
-        return { success: true };
-      } else {
-        return { success: false, error: 'Invalid email or password' };
-      }
+      await loginUser(email, password);
+      return { success: true };
     } catch (error) {
       return { success: false, error: error.message };
     }
   };
 
   // Handle user logout
-  const logout = () => {
+  const logout = async () => {
+    await logoutUser();
     setUser(null);
-    sessionStorage.removeItem('current_user');
   };
 
   // The provider gives access to the auth context to child components
   return (
-    <AuthContext.Provider value={{ user, login, logout, updateUser }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      login, 
+      logout, 
+      updateUser, 
+      allUsers,
+      loading 
+    }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,35 +1,41 @@
 // src/utils/services/logService.js
-const LOG_STORAGE_KEY = 'sailing_nationals_selection_logs';
+import { ref, set, get, push, remove } from 'firebase/database';
+import { database } from '../../firebase';
+
+const LOG_PATH = 'logs';
 
 // Add a new log entry
 export const addLogEntry = (type, data) => {
   try {
-    // Get existing logs
-    const logs = JSON.parse(localStorage.getItem(LOG_STORAGE_KEY) || '[]');
+    // Create a new log entry with a unique ID
+    const newLogRef = push(ref(database, LOG_PATH));
     
     // Create new log entry
     const newLog = {
-      id: Date.now(),
+      id: newLogRef.key,
       timestamp: new Date().toISOString(),
       type, // 'open' or 'women'
       data,
     };
     
-    // Add to logs and save
-    logs.push(newLog);
-    localStorage.setItem(LOG_STORAGE_KEY, JSON.stringify(logs));
-    
-    return true;
+    // Save to Firebase
+    return set(newLogRef, newLog);
   } catch (error) {
     console.error('Error adding log entry:', error);
-    return false;
+    return Promise.reject(error);
   }
 };
 
 // Get all logs
-export const getAllLogs = () => {
+export const getAllLogs = async () => {
   try {
-    return JSON.parse(localStorage.getItem(LOG_STORAGE_KEY) || '[]');
+    const snapshot = await get(ref(database, LOG_PATH));
+    if (snapshot.exists()) {
+      // Convert from Firebase object to array
+      const logsObj = snapshot.val();
+      return Object.values(logsObj);
+    }
+    return [];
   } catch (error) {
     console.error('Error retrieving logs:', error);
     return [];
@@ -37,10 +43,10 @@ export const getAllLogs = () => {
 };
 
 // Get logs by selection type
-export const getLogsByType = (type) => {
+export const getLogsByType = async (type) => {
   try {
-    const logs = JSON.parse(localStorage.getItem(LOG_STORAGE_KEY) || '[]');
-    return logs.filter(log => log.type === type);
+    const allLogs = await getAllLogs();
+    return allLogs.filter(log => log.type === type);
   } catch (error) {
     console.error('Error retrieving logs by type:', error);
     return [];
@@ -50,23 +56,19 @@ export const getLogsByType = (type) => {
 // Delete a log by ID
 export const deleteLog = (logId) => {
   try {
-    const logs = JSON.parse(localStorage.getItem(LOG_STORAGE_KEY) || '[]');
-    const updatedLogs = logs.filter(log => log.id !== logId);
-    localStorage.setItem(LOG_STORAGE_KEY, JSON.stringify(updatedLogs));
-    return true;
+    return remove(ref(database, `${LOG_PATH}/${logId}`));
   } catch (error) {
     console.error('Error deleting log:', error);
-    return false;
+    return Promise.reject(error);
   }
 };
 
 // Clear all logs
 export const clearAllLogs = () => {
   try {
-    localStorage.removeItem(LOG_STORAGE_KEY);
-    return true;
+    return remove(ref(database, LOG_PATH));
   } catch (error) {
     console.error('Error clearing logs:', error);
-    return false;
+    return Promise.reject(error);
   }
 };
