@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useEvent } from '../../contexts/EventContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { ref, get } from 'firebase/database';
+import { database } from '../../firebase';
 
 function LeftoverVoteMonitoring() {
     const { eventState, updateRankingGroup } = useEvent();
@@ -12,6 +14,137 @@ function LeftoverVoteMonitoring() {
     // For now, we'll use similar logic to get actual users
     const [selectors, setSelectors] = useState([]);
     const [nonRankedTeams, setNonRankedTeams] = useState([]);
+
+    const loadDataFromFirebase = async () => {
+        try {
+          console.log("LeftoverVoteMonitoring: Loading data from Firebase and localStorage");
+          
+          // Try to get users from Firebase first
+          let allUsers = [];
+          try {
+            const usersSnapshot = await get(ref(database, 'users'));
+            if (usersSnapshot.exists()) {
+              const usersData = usersSnapshot.val();
+              console.log("Firebase users data:", usersData);
+              
+              // Convert object to array
+              allUsers = Object.values(usersData);
+            } else {
+              console.log("No users found in Firebase");
+            }
+          } catch (firebaseError) {
+            console.error("Error reading from Firebase:", firebaseError);
+          }
+          
+          // If we didn't get users from Firebase, use localStorage as backup
+          if (allUsers.length === 0) {
+            console.log("Using localStorage for user data");
+            allUsers = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+          }
+          
+          // Filter for selectors
+          const selectorUsers = allUsers.filter(u => u && u.role === 'selector' && u.isActive !== false);
+          console.log("Found selectors:", selectorUsers.length);
+          
+          // Round key for the current round's leftover votes
+          const roundKey = `round${eventState.currentRound}_leftover`;
+          
+          // Create selector status objects
+          const selectorStatus = selectorUsers.map(selector => {
+            // Check if this selector has leftover votes for this round
+            const hasVoted = selector?.votingHistory?.[roundKey]?.submitted || false;
+            const timestamp = selector?.votingHistory?.[roundKey]?.timestamp || null;
+            
+            console.log(`Selector ${selector.name}: leftover voted=${hasVoted}, timestamp=${timestamp}`);
+            
+            return {
+              id: selector.id,
+              name: selector.name,
+              hasVoted: hasVoted,
+              timestamp: timestamp
+            };
+          });
+          
+          setSelectors(selectorStatus);
+          
+          // Count votes for each team outside the ranking group
+          const voteCounts = {};
+          const votingSelectors = selectorUsers.filter(s => s.votingHistory?.[roundKey]?.submitted).length;
+          
+          // Get teams that aren't in the ranking group
+          const teamsNotInRankingGroup = eventState.teams
+            .filter(team => 
+              !team.status?.isQualified && 
+              !eventState.rankingGroup.some(rankedTeam => rankedTeam.id === team.id)
+            );
+          
+          // Initialize counts
+          teamsNotInRankingGroup.forEach(team => {
+            voteCounts[team.id] = 0;
+          });
+          
+          // Count votes from each selector
+          selectorUsers.forEach(selector => {
+            const votes = selector.votingHistory?.[roundKey]?.votes || [];
+            votes.forEach(teamId => {
+              if (voteCounts[teamId] !== undefined) {
+                voteCounts[teamId] += 1;
+              }
+            });
+          });
+          
+          // Calculate percentages
+          const processedTeams = teamsNotInRankingGroup.map(team => {
+            const voteCount = voteCounts[team.id] || 0;
+            const votePercentage = votingSelectors > 0 
+              ? Math.round((voteCount / votingSelectors) * 100)
+              : 0;
+            
+            return {
+              ...team,
+              votePercentage,
+              shouldAdd: votePercentage >= 80 // 80% threshold
+            };
+          });
+          
+          setNonRankedTeams(processedTeams);
+          
+          return true;
+        } catch (error) {
+          console.error("Error loading vote data:", error);
+          return false;
+        }
+      };
+      
+      // Add a refresh function
+      const refreshData = () => {
+        loadDataFromFirebase();
+      };
+      
+      // Add this effect to load data when the component mounts
+      useEffect(() => {
+        loadDataFromFirebase();
+        
+        // Set up periodic auto-refresh
+        const refreshInterval = setInterval(() => {
+          loadDataFromFirebase();
+        }, 10000); // Every 10 seconds
+        
+        return () => clearInterval(refreshInterval);
+      }, [eventState.teams, eventState.rankingGroup, eventState.currentRound]);
+      
+      // Add this button to your component JSX, right after the component title
+      <div className="mb-4 flex justify-end">
+        <button 
+          onClick={refreshData}
+          className="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-lg text-gray-700 flex items-center"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
+            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+          </svg>
+          Refresh Data
+        </button>
+      </div>
 
     // Use useEffect to load data
     useEffect(() => {
@@ -79,6 +212,8 @@ function LeftoverVoteMonitoring() {
         
         setNonRankedTeams(processedTeams);
       }, [eventState.teams, eventState.rankingGroup, eventState.currentRound]);
+
+    
     
     // Sort by vote percentage (highest first)
     const sortedTeamVotes = [...nonRankedTeams].sort((a, b) => b.votePercentage - a.votePercentage);

@@ -129,36 +129,41 @@ function LeftoverVoting() {
     
     // Update the submit function
     const submitVotes = () => {
-      try {
-        // Prepare the voting data
-        const votingData = {
-          votes: Array.from(selectedTeams),
-          submitted: true,
-          timestamp: new Date().toISOString()
-        };
-        
-        // Update the user's voting history for this specific round
-        const updatedUser = {
-          ...user,
-          votingHistory: {
-            ...(safeGet(user, 'votingHistory', {})),
+        try {
+          // Prepare the voting data
+          const roundKey = `round${eventState.currentRound}_leftover`;
+          const votingData = {
+            votes: Array.from(selectedTeams),
+            submitted: true,
+            timestamp: new Date().toISOString()
+          };
+          
+          // Update the user's voting history for this specific round
+          const updatedVotingHistory = {
+            ...(user.votingHistory || {}),
             [roundKey]: votingData
-          }
-        };
-        
-        // Save the updated user
-        updateUser(updatedUser);
-        
-        // Mark the form as submitted
-        setIsSubmitted(true);
-        
-        // Show success message
-        alert("Your leftover votes have been submitted successfully!");
-      } catch (error) {
-        console.error("Error submitting votes:", error);
-        alert("An error occurred while submitting your votes. Please try again.");
-      }
-    };
+          };
+          
+          // Update the complete user object
+          const updatedUser = {
+            ...user,
+            votingHistory: updatedVotingHistory
+          };
+          
+          // Save the updated user with the new voting history
+          console.log("Saving leftover votes to Firebase:", updatedVotingHistory);
+          updateUser(updatedUser);
+          
+          // Mark the form as submitted locally
+          setIsSubmitted(true);
+          
+          // Show success message
+          alert("Your leftover votes have been submitted successfully!");
+        } catch (error) {
+          console.error("Error submitting leftover votes:", error);
+          alert("An error occurred while submitting your votes. Please try again.");
+        }
+      };
 
     // Handle selecting/deselecting a team
     const toggleTeamSelection = (teamId) => {
