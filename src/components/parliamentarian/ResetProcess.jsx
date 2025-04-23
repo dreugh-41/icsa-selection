@@ -1,6 +1,8 @@
 // src/components/parliamentarian/ResetProcess.jsx
 import React, { useState } from 'react';
 import { useEvent } from '../../contexts/EventContext';
+import { ref, set, update } from 'firebase/database';
+import { database } from '../../firebase';
 
 function ResetProcess() {
   const { resetEventState } = useEvent();
@@ -9,31 +11,59 @@ function ResetProcess() {
   const handleReset = () => {
     console.log("Reset process initiated");
     
-    // First, clear localStorage directly
-    localStorage.removeItem('sailing_nationals_event_state');
-    
-    // Clear selector voting history
-    const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
-    const updatedUsers = users.map(user => {
-      if (user.role === 'selector') {
-        return {
-          ...user,
-          votingHistory: {} // Clear all voting history
-        };
+    try {
+      // First, clear localStorage directly
+      localStorage.removeItem('sailing_nationals_event_state');
+      
+      // Clear selector voting history
+      const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+      const updatedUsers = users.map(user => {
+        if (user.role === 'selector') {
+          return {
+            ...user,
+            votingHistory: {} // Clear all voting history
+          };
+        }
+        return user;
+      });
+      
+      // Save updated users to localStorage
+      localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
+      
+      // Save updated users to Firebase
+      try {
+        // Save each user separately to ensure proper updates
+        updatedUsers.forEach(async (user) => {
+          if (user.id) {
+            const userRef = ref(database, `users/${user.id}`);
+            await update(userRef, { votingHistory: {} });
+            console.log(`Reset voting history for user ${user.id} in Firebase`);
+          }
+        });
+        
+        // Also clear the entire event state in Firebase
+        const eventStateRef = ref(database, 'eventState');
+        set(eventStateRef, null);
+        
+        console.log("Reset Firebase data successfully");
+      } catch (firebaseError) {
+        console.error("Error resetting Firebase data:", firebaseError);
+        // Continue anyway since we have localStorage updated
       }
-      return user;
-    });
-    localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
-    
-    // Now call the context function
-    resetEventState();
-    
-    // Add a delay then force refresh the page
-    setTimeout(() => {
-      window.location.reload();
-    }, 1000);
-    
-    setShowConfirmation(false);
+      
+      // Now call the context function
+      resetEventState();
+      
+      // Add a delay then force refresh the page
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+      
+      setShowConfirmation(false);
+    } catch (error) {
+      console.error("Error during reset process:", error);
+      alert("An error occurred during reset. Please try again.");
+    }
   };
 
   return (
