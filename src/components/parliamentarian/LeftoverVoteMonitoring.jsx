@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useEvent } from '../../contexts/EventContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { ref, get } from 'firebase/database';
+import { ref, get, set, onValue } from 'firebase/database';
 import { database } from '../../firebase';
 
 function LeftoverVoteMonitoring() {
@@ -169,6 +169,21 @@ const bypassSelectorCheck = () => {
       // Save back to localStorage
       localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
       console.log(`Updated all selectors to show they've submitted leftover votes for round ${eventState.currentRound}`);
+      
+      // Also update Firebase if possible
+      try {
+        updatedUsers.forEach(async (user) => {
+          if (user.role === 'selector' && user.id) {
+            const userRef = ref(database, `users/${user.id}`);
+            const update = { 
+              votingHistory: user.votingHistory 
+            };
+            set(userRef, update); // This is where the error occurs
+          }
+        });
+      } catch (e) {
+        console.log("Couldn't update Firebase but localStorage was updated");
+      }
       
       return true;
     } catch (error) {
