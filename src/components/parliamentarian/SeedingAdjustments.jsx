@@ -20,7 +20,10 @@ function SeedingAdjustments() {
   const isEastSeed = (seed) => eastSeeds.includes(seed);
 
   // Initialize teams when component loads
-  useEffect(() => {
+  // In SeedingAdjustments.jsx
+// Modify the useEffect for the parliamentarian view to use the same sorting logic
+
+useEffect(() => {
     if (initializedTeams) return;
     
     // Check if there are saved adjustments to load
@@ -43,6 +46,8 @@ function SeedingAdjustments() {
       }
     }
     
+    console.log("Initializing seeding adjustments based on selector averages");
+    
     // Get all qualified teams (excluding alternates)
     const qualifiedTeams = [...eventState.qualifiedTeams].filter(team => 
       !team.status.isAlternate && team.status.qualificationMethod !== 'ALTERNATE'
@@ -51,6 +56,8 @@ function SeedingAdjustments() {
     // Load seeding data from users
     const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
     const selectorUsers = users.filter(u => u.role === 'selector' && u.votingHistory?.seeding?.submitted);
+    
+    console.log(`Found ${selectorUsers.length} selectors with submitted seedings`);
     
     // Calculate average seedings
     const teamSeedSums = {};
@@ -88,7 +95,7 @@ function SeedingAdjustments() {
     const sortedTeams = [...teamsWithSeeding].sort((a, b) => a.averageSeed - b.averageSeed);
     
     console.log("Teams sorted by average seed:", sortedTeams.map((t, i) => 
-      `${i+1}. ${t.name} (Avg: ${t.averageSeed})`).join('\n'));
+      `${i+1}. ${t.name} (Avg: ${t.averageSeed})`));
     
     // Assign seeds 1-36 based on sorted order
     const teamsWithAssignedSeeds = sortedTeams.map((team, index) => ({
@@ -115,6 +122,8 @@ function SeedingAdjustments() {
     setEastTeams(east);
     setWestTeams(west);
     setInitializedTeams(true);
+    
+    console.log("Initialized seeding adjustments - East:", east.length, "West:", west.length);
   }, [eventState.qualifiedTeams, initializedTeams]);
 
   // Add a helper function to save adjustments
