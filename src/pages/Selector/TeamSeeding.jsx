@@ -3,6 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { useEvent } from '../../contexts/EventContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { safeGet, safeArrayLength } from '../../utils/safeFetch';
+import { ref, get, set, update } from 'firebase/database';
+import { database } from '../firebase';
 
 function TeamSeeding() {
     const { eventState } = useEvent();
@@ -208,9 +210,16 @@ function TeamSeeding() {
                 return;
             }
             
+            // Explicitly rank teams by the order they appear in rankedTeams
+            // This is where average seeding comes from
+            const rankings = rankedTeams.map(team => team.id);
+            
+            console.log("Submitting seeding in this order:", 
+                rankedTeams.map((team, i) => `${i+1}. ${team.name}`));
+            
             // Prepare the seeding data
             const seedingData = {
-                rankings: rankedTeams.map(team => team.id),
+                rankings: rankings,
                 submitted: true,
                 timestamp: new Date().toISOString()
             };
@@ -224,14 +233,38 @@ function TeamSeeding() {
                 }
             };
             
-            // Save the updated user
-            updateUser(updatedUser);
-            
-            // Mark the form as submitted
-            setIsSubmitted(true);
-            
-            // Show success message
-            alert("Your seeding rankings have been submitted successfully!");
+            // Save the updated user - ensure we're only updating the seeding path
+            const userSeedingRef = ref(database, `users/${user.id}/votingHistory/seeding`);
+            set(userSeedingRef, seedingData)
+                .then(() => {
+                    console.log("Successfully saved seeding to Firebase");
+                    
+                    // Also update in localStorage
+                    const allUsers = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+                    const updatedUsers = allUsers.map(u => {
+                        if (u.id === user.id) {
+                            return {
+                                ...u,
+                                votingHistory: {
+                                    ...(u.votingHistory || {}),
+                                    seeding: seedingData
+                                }
+                            };
+                        }
+                        return u;
+                    });
+                    localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
+                    
+                    // Mark the form as submitted
+                    setIsSubmitted(true);
+                    
+                    // Show success message
+                    alert("Your seeding rankings have been submitted successfully!");
+                })
+                .catch(error => {
+                    console.error("Error saving to Firebase:", error);
+                    alert("An error occurred while submitting your seedings. Please try again.");
+                });
         } catch (error) {
             console.error("Error submitting seeding:", error);
             alert("An error occurred while submitting your seedings. Please try again.");

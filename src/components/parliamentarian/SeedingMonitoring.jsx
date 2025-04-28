@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useEvent } from '../../contexts/EventContext';
 import { addLogEntry } from '../../utils/services/logService';
-import { ref, get } from 'firebase/database';
+import { ref, get, set } from 'firebase/database';
 import { database } from '../../firebase';
 
 function SeedingMonitoring() {
@@ -20,68 +20,81 @@ function SeedingMonitoring() {
       };
 
       const processSeedings = (selectorUsers) => {
-        // Gather and process seedings
-        const allSeedings = [];
-        selectorUsers.forEach(selector => {
-          if (selector?.votingHistory?.seeding?.submitted) {
-            const selectorSeedings = selector.votingHistory.seeding.rankings || [];
-            
-            // Create a properly formatted seeding entry
-            allSeedings.push({
-              selectorId: selector.id,
-              selectorName: selector.name,
-              seedings: selectorSeedings.map((teamId, index) => {
-                const team = eventState.teams.find(t => t.id === teamId);
-                return {
-                  teamId,
-                  teamName: team ? team.name : 'Unknown Team',
-                  seed: index + 1
-                };
-              })
-            });
-          }
-        });
-        
-        setSelectorSeedings(allSeedings);
-        
-        // Calculate average seedings
-        if (allSeedings.length > 0) {
-          const teamSeedSums = {};
-          const teamSeedCounts = {};
-          const teamDetails = {};
-          
-          // Collect all seedings
-          allSeedings.forEach(selector => {
-            selector.seedings.forEach(seeding => {
-              if (!teamSeedSums[seeding.teamId]) {
-                teamSeedSums[seeding.teamId] = 0;
-                teamSeedCounts[seeding.teamId] = 0;
-                teamDetails[seeding.teamId] = {
-                  teamName: seeding.teamName,
-                  seedings: []
-                };
-              }
+        try {
+          // Gather and process seedings
+          const allSeedings = [];
+          selectorUsers.forEach(selector => {
+            if (selector?.votingHistory?.seeding?.submitted) {
+              const selectorSeedings = selector.votingHistory.seeding.rankings || [];
               
-              teamSeedSums[seeding.teamId] += seeding.seed;
-              teamSeedCounts[seeding.teamId]++;
-              teamDetails[seeding.teamId].seedings.push(seeding.seed);
-            });
+              // Create a properly formatted seeding entry
+              allSeedings.push({
+                selectorId: selector.id,
+                selectorName: selector.name,
+                seedings: selectorSeedings.map((teamId, index) => {
+                  const team = eventState.teams.find(t => t.id === teamId);
+                  return {
+                    teamId,
+                    teamName: team ? team.name : 'Unknown Team',
+                    seed: index + 1
+                  };
+                })
+              });
+            }
           });
           
-          // Calculate averages
-          const avgSeedings = Object.keys(teamSeedSums).map(teamId => ({
-            teamId,
-            teamName: teamDetails[teamId].teamName,
-            averageSeed: (teamSeedSums[teamId] / teamSeedCounts[teamId]).toFixed(2),
-            seedings: teamDetails[teamId].seedings
-          }));
+          setSelectorSeedings(allSeedings);
           
-          // Sort by average seed
-          const sortedSeedings = avgSeedings.sort((a, b) => 
-            parseFloat(a.averageSeed) - parseFloat(b.averageSeed)
-          );
-          
-          setAverageSeedings(sortedSeedings);
+          // Calculate average seedings
+          if (allSeedings.length > 0) {
+            const teamSeedSums = {};
+            const teamSeedCounts = {};
+            const teamDetails = {};
+            
+            // Collect all seedings
+            allSeedings.forEach(selector => {
+              selector.seedings.forEach(seeding => {
+                if (!teamSeedSums[seeding.teamId]) {
+                  teamSeedSums[seeding.teamId] = 0;
+                  teamSeedCounts[seeding.teamId] = 0;
+                  teamDetails[seeding.teamId] = {
+                    teamName: seeding.teamName,
+                    seedings: []
+                  };
+                }
+                
+                teamSeedSums[seeding.teamId] += seeding.seed;
+                teamSeedCounts[seeding.teamId]++;
+                teamDetails[seeding.teamId].seedings.push(seeding.seed);
+              });
+            });
+            
+            // Calculate averages
+            const avgSeedings = Object.keys(teamSeedSums).map(teamId => ({
+              teamId,
+              teamName: teamDetails[teamId].teamName,
+              averageSeed: (teamSeedSums[teamId] / teamSeedCounts[teamId]).toFixed(2),
+              seedings: teamDetails[teamId].seedings
+            }));
+            
+            // Sort by average seed
+            const sortedSeedings = avgSeedings.sort((a, b) => 
+              parseFloat(a.averageSeed) - parseFloat(b.averageSeed)
+            );
+            
+            console.log("Sorted seedings order:", sortedSeedings.map((t, i) => 
+              `${i+1}. ${t.teamName} (Avg: ${t.averageSeed})`));
+            
+            setAverageSeedings(sortedSeedings);
+            
+            // Save this to Firebase to ensure consistency
+            const averageRankingsRef = ref(database, 'averageRankings');
+            set(averageRankingsRef, sortedSeedings)
+              .then(() => console.log("Saved average rankings to Firebase"))
+              .catch(err => console.error("Error saving average rankings:", err));
+          }
+        } catch (error) {
+          console.error("Error processing seedings:", error);
         }
       };
     
