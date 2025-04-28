@@ -4,7 +4,7 @@ import { useEvent } from '../../contexts/EventContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { safeGet, safeArrayLength } from '../../utils/safeFetch';
 import { ref, get, set, update } from 'firebase/database';
-import { database } from '../firebase';
+import { database } from '../../firebase';
 
 function TeamSeeding() {
     const { eventState } = useEvent();
