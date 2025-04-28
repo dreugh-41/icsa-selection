@@ -24,107 +24,124 @@ function SeedingAdjustments() {
 // Modify the useEffect for the parliamentarian view to use the same sorting logic
 
 useEffect(() => {
-    if (initializedTeams) return;
-    
-    // Check if there are saved adjustments to load
-    const savedAdjustments = localStorage.getItem('sailing_nationals_seeding_adjustments');
-    
-    if (savedAdjustments) {
-      try {
-        const { east, west } = JSON.parse(savedAdjustments);
-        
-        // If east and west teams exist and are arrays
-        if (Array.isArray(east) && Array.isArray(west)) {
-          setEastTeams(east);
-          setWestTeams(west);
-          setInitializedTeams(true);
-          return; // Skip the rest of initialization
-        }
-      } catch (e) {
-        console.error("Error loading saved adjustments:", e);
-        // Continue with normal initialization
+  if (initializedTeams) return;
+  
+  console.log("Initializing teams for seeding adjustments");
+  
+  // Check if there are saved adjustments to load first
+  const savedAdjustments = localStorage.getItem('sailing_nationals_seeding_adjustments');
+  
+  if (savedAdjustments) {
+    try {
+      const { east, west } = JSON.parse(savedAdjustments);
+      
+      // If east and west teams exist and are arrays
+      if (Array.isArray(east) && Array.isArray(west)) {
+        console.log("Found saved adjustments - using these");
+        setEastTeams(east);
+        setWestTeams(west);
+        setInitializedTeams(true);
+        return; // Skip the rest of initialization
       }
+    } catch (e) {
+      console.error("Error loading saved adjustments:", e);
+      // Continue with normal initialization
+    }
+  }
+  
+  // Load average seedings from all selectors
+  console.log("Calculating team seedings from selector votes");
+  
+  // Get all qualified teams (excluding alternates)
+  const qualifiedTeams = [...(eventState.qualifiedTeams || []), ...(eventState.pendingQualifiedTeams || [])]
+    .filter(team => !team.status.isAlternate && team.status.qualificationMethod !== 'ALTERNATE');
+  
+  console.log(`Found ${qualifiedTeams.length} qualified non-alternate teams`);
+  
+  // Load seeding data from users
+  const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+  const selectorUsers = users.filter(u => u.role === 'selector' && u.votingHistory?.seeding?.submitted);
+  
+  console.log(`Found ${selectorUsers.length} selectors with submitted seedings`);
+  
+  // Debug - log a sample of selector seedings
+  if (selectorUsers.length > 0) {
+    const sampleSelector = selectorUsers[0];
+    console.log(`Sample selector ${sampleSelector.name} rankings:`, 
+                sampleSelector.votingHistory?.seeding?.rankings?.slice(0, 5));
+  }
+  
+  // Calculate average seedings
+  const teamSeedSums = {};
+  const teamSeedCounts = {};
+  
+  // Collect all seedings from selectors
+  selectorUsers.forEach(selector => {
+    const seedings = selector.votingHistory?.seeding?.rankings || [];
+    
+    seedings.forEach((teamId, index) => {
+      if (!teamSeedSums[teamId]) {
+        teamSeedSums[teamId] = 0;
+        teamSeedCounts[teamId] = 0;
+      }
+      
+      teamSeedSums[teamId] += (index + 1); // Add the rank (1-based)
+      teamSeedCounts[teamId]++;
+    });
+  });
+  
+  // Calculate average seed for each team
+  const teamsWithSeeding = qualifiedTeams.map(team => {
+    let averageSeed = null;
+    if (teamSeedSums[team.id] && teamSeedCounts[team.id]) {
+      averageSeed = Math.round(teamSeedSums[team.id] / teamSeedCounts[team.id]);
     }
     
-    console.log("Initializing seeding adjustments based on selector averages");
-    
-    // Get all qualified teams (excluding alternates)
-    const qualifiedTeams = [...eventState.qualifiedTeams].filter(team => 
-      !team.status.isAlternate && team.status.qualificationMethod !== 'ALTERNATE'
-    );
-    
-    // Load seeding data from users
-    const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
-    const selectorUsers = users.filter(u => u.role === 'selector' && u.votingHistory?.seeding?.submitted);
-    
-    console.log(`Found ${selectorUsers.length} selectors with submitted seedings`);
-    
-    // Calculate average seedings
-    const teamSeedSums = {};
-    const teamSeedCounts = {};
-    
-    // Collect all seedings from selectors
-    selectorUsers.forEach(selector => {
-      const seedings = selector.votingHistory.seeding.rankings || [];
-      
-      seedings.forEach((teamId, index) => {
-        if (!teamSeedSums[teamId]) {
-          teamSeedSums[teamId] = 0;
-          teamSeedCounts[teamId] = 0;
-        }
-        
-        teamSeedSums[teamId] += (index + 1); // Add the rank (1-based)
-        teamSeedCounts[teamId]++;
-      });
-    });
-    
-    // Calculate average seed for each team
-    const teamsWithSeeding = qualifiedTeams.map(team => {
-      let averageSeed = null;
-      if (teamSeedSums[team.id] && teamSeedCounts[team.id]) {
-        averageSeed = Math.round(teamSeedSums[team.id] / teamSeedCounts[team.id]);
-      }
-      
-      return {
-        ...team,
-        averageSeed: averageSeed || 999 // Default high value if no seeding data
-      };
-    });
-    
-    // Sort by average seed
-    const sortedTeams = [...teamsWithSeeding].sort((a, b) => a.averageSeed - b.averageSeed);
-    
-    console.log("Teams sorted by average seed:", sortedTeams.map((t, i) => 
-      `${i+1}. ${t.name} (Avg: ${t.averageSeed})`));
-    
-    // Assign seeds 1-36 based on sorted order
-    const teamsWithAssignedSeeds = sortedTeams.map((team, index) => ({
+    return {
       ...team,
-      assignedSeed: index + 1 // 1-based seeding
-    }));
-    
-    // Split into East and West based on the assigned seeds
-    const east = [];
-    const west = [];
-    
-    teamsWithAssignedSeeds.forEach(team => {
-      if (isEastSeed(team.assignedSeed)) {
-        east.push(team);
-      } else {
-        west.push(team);
-      }
-    });
-    
-    // Sort each division by seed
-    east.sort((a, b) => a.assignedSeed - b.assignedSeed);
-    west.sort((a, b) => a.assignedSeed - b.assignedSeed);
-    
-    setEastTeams(east);
-    setWestTeams(west);
-    setInitializedTeams(true);
-    
-    console.log("Initialized seeding adjustments - East:", east.length, "West:", west.length);
-  }, [eventState.qualifiedTeams, initializedTeams]);
+      averageSeed: averageSeed || 999 // Default high value if no seeding data
+    };
+  });
+  
+  // Sort by average seed
+  const sortedTeams = [...teamsWithSeeding].sort((a, b) => a.averageSeed - b.averageSeed);
+  
+  // Log the sorted order for debugging
+  console.log("Teams sorted by average seed:");
+  sortedTeams.forEach((team, idx) => {
+    console.log(`${idx+1}. ${team.name} (Avg seed: ${team.averageSeed})`);
+  });
+  
+  // Assign seeds 1-36 based on sorted order
+  const teamsWithAssignedSeeds = sortedTeams.map((team, index) => ({
+    ...team,
+    assignedSeed: index + 1 // 1-based seeding
+  }));
+  
+  // Split into East and West based on the assigned seeds
+  const east = [];
+  const west = [];
+  
+  teamsWithAssignedSeeds.forEach(team => {
+    if (isEastSeed(team.assignedSeed)) {
+      east.push(team);
+    } else {
+      west.push(team);
+    }
+  });
+  
+  // Sort each division by seed
+  east.sort((a, b) => a.assignedSeed - b.assignedSeed);
+  west.sort((a, b) => a.assignedSeed - b.assignedSeed);
+  
+  // Log the final division assignments
+  console.log(`East division: ${east.length} teams`);
+  console.log(`West division: ${west.length} teams`);
+  
+  setEastTeams(east);
+  setWestTeams(west);
+  setInitializedTeams(true);
+}, [eventState.qualifiedTeams, eventState.pendingQualifiedTeams, initializedTeams]);
 
   // Add a helper function to save adjustments
   const saveAdjustmentsToStorage = (east, west) => {
