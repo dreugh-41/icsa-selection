@@ -28,55 +28,50 @@ useEffect(() => {
   
   console.log("Initializing teams for seeding adjustments");
   
-  // First, check if we have saved adjustments
-  const savedAdjustments = localStorage.getItem('sailing_nationals_seeding_adjustments');
-  
-  if (savedAdjustments) {
+  // Function to load teams from Firebase averageRankings
+  const loadTeamsFromAverageRankings = async () => {
     try {
-      const { east, west } = JSON.parse(savedAdjustments);
+      console.log("Attempting to load average rankings from Firebase");
       
-      // If east and west teams exist and are arrays
-      if (Array.isArray(east) && Array.isArray(west)) {
-        console.log("Using saved adjustments");
-        setEastTeams(east);
-        setWestTeams(west);
-        setInitializedTeams(true);
-        return; // Skip the rest of initialization
-      }
-    } catch (e) {
-      console.error("Error loading saved adjustments:", e);
-    }
-  }
-  
-  // Next, check if we have average rankings in Firebase
-  const loadAverageRankings = async () => {
-    try {
+      // Directly get averageRankings from Firebase
       const rankingsRef = ref(database, 'averageRankings');
       const snapshot = await get(rankingsRef);
       
       if (snapshot.exists()) {
         const averageRankings = snapshot.val();
-        console.log("Using average rankings from Firebase");
+        console.log("Found average rankings in Firebase:", averageRankings.length);
         
         // Get qualified teams to match with rankings
-        const qualifiedTeams = [...eventState.qualifiedTeams].filter(team => 
+        const qualifiedTeams = [...(eventState.qualifiedTeams || [])].filter(team => 
           !team.status.isAlternate && team.status.qualificationMethod !== 'ALTERNATE'
         );
         
-        // Assign seeds based on the average rankings order
-        const teamsWithSeeds = averageRankings.map((ranking, index) => {
-          const team = qualifiedTeams.find(t => t.id === ranking.teamId);
-          if (!team) return null;
-          
-          return {
-            ...team,
-            assignedSeed: index + 1,
-            averageSeed: parseFloat(ranking.averageSeed)
-          };
-        }).filter(Boolean);
+        console.log("Qualified teams count:", qualifiedTeams.length);
         
-        console.log("Teams with assigned seeds:", teamsWithSeeds.map((t, i) => 
-          `${i+1}. ${t.name} (Avg: ${t.averageSeed})`));
+        // Log the first few rankings to verify
+        console.log("First 5 average rankings:", averageRankings.slice(0, 5).map(r => 
+          `${r.teamName} (Avg: ${r.averageSeed})`));
+        
+        // Assign seeds based on the average rankings order
+        const teamsWithSeeds = [];
+        for (let i = 0; i < averageRankings.length; i++) {
+          const ranking = averageRankings[i];
+          const team = qualifiedTeams.find(t => t.id === ranking.teamId);
+          
+          if (team) {
+            teamsWithSeeds.push({
+              ...team,
+              assignedSeed: i + 1,
+              averageSeed: parseFloat(ranking.averageSeed)
+            });
+          }
+        }
+        
+        console.log("Teams with assigned seeds count:", teamsWithSeeds.length);
+        console.log("Teams in order by average ranking:");
+        teamsWithSeeds.forEach((team, idx) => {
+          console.log(`${idx+1}. ${team.name} (Avg: ${team.averageSeed})`);
+        });
         
         // Split into East and West based on the assigned seeds
         const east = [];
@@ -94,45 +89,27 @@ useEffect(() => {
         east.sort((a, b) => a.assignedSeed - b.assignedSeed);
         west.sort((a, b) => a.assignedSeed - b.assignedSeed);
         
+        console.log("East division teams:", east.length);
+        console.log("West division teams:", west.length);
+        
         setEastTeams(east);
         setWestTeams(west);
         setInitializedTeams(true);
-        
-        // Save these as the adjustments since they're based on average rankings
-        const adjustments = {
-          east,
-          west,
-          timestamp: new Date().toISOString()
-        };
-        
-        localStorage.setItem('sailing_nationals_seeding_adjustments', JSON.stringify(adjustments));
-        
-        // Also save to Firebase
-        const adjustmentsRef = ref(database, 'seedingAdjustments');
-        set(adjustmentsRef, adjustments)
-          .then(() => console.log("Saved initial seeding adjustments to Firebase"))
-          .catch(err => console.error("Error saving initial adjustments:", err));
-        
         return true;
       }
+      
+      console.log("No average rankings found in Firebase");
       return false;
     } catch (error) {
-      console.error("Error loading average rankings:", error);
+      console.error("Error loading average rankings from Firebase:", error);
       return false;
     }
   };
   
-  // Try to load from average rankings first
-  loadAverageRankings().then(success => {
-    // If we couldn't load from average rankings, use the old method
-    if (!success) {
-      console.log("Falling back to calculating seeds from localStorage");
-      
-      // Rest of your existing initialization code...
-      // Calculate average seedings from localStorage users
-    }
-  });
-}, [eventState.qualifiedTeams, initializedTeams, isEastSeed]);
+  // Try to load teams from Firebase averageRankings
+  loadTeamsFromAverageRankings();
+  
+}, [eventState.qualifiedTeams, initializedTeams]);
 
   // Add a helper function to save adjustments
   const saveAdjustmentsToStorage = (east, west) => {
