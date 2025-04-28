@@ -215,10 +215,33 @@ useEffect(() => {
     if (user.role !== 'parliamentarian') return;
     
     try {
+      // Ensure the teams maintain their assigned seeds
+      const eastWithSeeds = eastTeams.map(team => ({
+        ...team,
+        assignedSeed: team.assignedSeed,  // Explicitly preserve the seed
+        averageSeed: team.averageSeed     // Preserve the average seed too
+      }));
+      
+      const westWithSeeds = westTeams.map(team => ({
+        ...team,
+        assignedSeed: team.assignedSeed,  // Explicitly preserve the seed
+        averageSeed: team.averageSeed     // Preserve the average seed too
+      }));
+      
+      // Sort the teams explicitly by their assigned seed
+      const sortedEast = [...eastWithSeeds].sort((a, b) => a.assignedSeed - b.assignedSeed);
+      const sortedWest = [...westWithSeeds].sort((a, b) => a.assignedSeed - b.assignedSeed);
+      
+      // Log the order before saving for debugging
+      console.log("East division order before saving:", sortedEast.map(t => 
+        `${t.assignedSeed}. ${t.name} (avg: ${t.averageSeed})`));
+      console.log("West division order before saving:", sortedWest.map(t => 
+        `${t.assignedSeed}. ${t.name} (avg: ${t.averageSeed})`));
+      
       // Prepare adjustments data with current timestamp
       const adjustments = {
-        east: eastTeams,
-        west: westTeams,
+        east: sortedEast,
+        west: sortedWest,
         timestamp: new Date().toISOString()
       };
       
@@ -246,6 +269,51 @@ useEffect(() => {
       alert("There was an error saving the adjustments");
     }
   };
+
+  useEffect(() => {
+    // Check Firebase for seeding adjustments
+    const checkFirebaseAdjustments = async () => {
+      try {
+        const adjustmentsRef = ref(database, 'seedingAdjustments');
+        const snapshot = await get(adjustmentsRef);
+        
+        if (snapshot.exists()) {
+          const firebaseAdjustments = snapshot.val();
+          
+          // Check if newer than what we have
+          const localTimestamp = localStorage.getItem('seeding_adjustments_timestamp');
+          
+          if (!localTimestamp || firebaseAdjustments.timestamp > localTimestamp) {
+            console.log("Found newer seeding adjustments in Firebase");
+            
+            // Ensure teams are sorted by assignedSeed before setting state
+            const sortedEast = [...firebaseAdjustments.east].sort((a, b) => a.assignedSeed - b.assignedSeed);
+            const sortedWest = [...firebaseAdjustments.west].sort((a, b) => a.assignedSeed - b.assignedSeed);
+            
+            // Log what we found for debugging
+            console.log("East from Firebase (sorted):", sortedEast.map(t => 
+              `${t.assignedSeed}. ${t.name} (avg: ${t.averageSeed})`));
+            
+            setEastTeams(sortedEast);
+            setWestTeams(sortedWest);
+            
+            // Update localStorage timestamp
+            localStorage.setItem('seeding_adjustments_timestamp', firebaseAdjustments.timestamp);
+          }
+        }
+      } catch (error) {
+        console.error("Error checking Firebase for seeding adjustments:", error);
+      }
+    };
+    
+    // Check on component mount
+    checkFirebaseAdjustments();
+    
+    // Set up interval to check periodically
+    const interval = setInterval(checkFirebaseAdjustments, 10000);
+    
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     // Set up listener for real-time Firebase updates
