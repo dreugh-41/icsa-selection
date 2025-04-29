@@ -3,6 +3,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useEvent, EVENT_PHASES } from '../../contexts/EventContext';
 import { useAuth } from '../../contexts/AuthContext';
 import Papa from 'papaparse';
+import { ref, get, set } from 'firebase/database';
+import { database } from '../../firebase';
+
 
 function ProcessSelection() {
   const { eventState, setSelectionType, resetEventState, advancePhase, setEventTeams } = useEvent();
@@ -20,9 +23,50 @@ function ProcessSelection() {
 
   // Load all available selectors
   React.useEffect(() => {
-    const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
-    const selectorUsers = users.filter(u => u.role === 'selector');
-    setAllSelectors(selectorUsers);
+    // Function to load all available selectors
+    const loadSelectors = async () => {
+      try {
+        console.log("Loading selectors from Firebase...");
+        
+        // Try to get users from Firebase first
+        let allUsers = [];
+        try {
+          const usersSnapshot = await get(ref(database, 'users'));
+          if (usersSnapshot.exists()) {
+            const usersData = usersSnapshot.val();
+            console.log("Firebase users data found");
+            
+            // Convert object to array
+            allUsers = Object.values(usersData);
+          } else {
+            console.log("No users found in Firebase");
+          }
+        } catch (firebaseError) {
+          console.error("Error reading from Firebase:", firebaseError);
+        }
+        
+        // If we didn't get users from Firebase, use localStorage as backup
+        if (allUsers.length === 0) {
+          console.log("Using localStorage for user data");
+          allUsers = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+        }
+        
+        // Filter for selectors
+        const selectorUsers = allUsers.filter(u => u.role === 'selector');
+        console.log(`Found ${selectorUsers.length} selectors`);
+        
+        setAllSelectors(selectorUsers);
+      } catch (error) {
+        console.error("Error loading selectors:", error);
+        // Try to use localStorage as a fallback
+        const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+        const selectorUsers = users.filter(u => u.role === 'selector');
+        setAllSelectors(selectorUsers);
+      }
+    };
+    
+    // Load selectors when component mounts
+    loadSelectors();
   }, []);
 
   // Handle selector selection
@@ -74,116 +118,139 @@ const handleFileSelect = (event) => {
   };
 
   // Handle start process
-    const handleStartProcess = () => {
-        if (!file) {
-        alert('Please upload the CSR file first.');
-        return;
+  const handleStartProcess = () => {
+    if (!file) {
+      alert('Please upload the CSR file first.');
+      return;
+    }
+    
+    setIsUploading(true);
+    
+    // Parse CSV file
+    Papa.parse(file, {
+      header: false,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        if (results.errors.length > 0) {
+          setUploadError(`Error parsing CSV: ${results.errors[0].message}`);
+          setIsUploading(false);
+          return;
         }
         
-        setIsUploading(true);
-        
-        // Parse CSV file
-        Papa.parse(file, {
-        header: false,
-        skipEmptyLines: true,
-        complete: (results) => {
-            if (results.errors.length > 0) {
-            setUploadError(`Error parsing CSV: ${results.errors[0].message}`);
+        try {
+          // Skip the first two rows (headers) and extract team data
+          const rowData = results.data.slice(2);
+          
+          // Determine which columns to use based on selection type
+          let rankColumn = 0; // Column A for Open Rankings
+          let nameColumn = 1; // Column B for Open Team Name
+          
+          if (selectedType === 'women') {
+            // For Women's selection, use different columns
+            rankColumn = 5; // Column F for Women's Rankings
+            nameColumn = 6; // Column G for Women's Team Name
+          }
+          
+          // Transform data to match our team format
+          const teams = rowData
+            .filter(row => row[rankColumn] && row[nameColumn]) // Ensure rank and team name exist
+            .map((row, index) => {
+              // Extract rank and team name from the appropriate columns
+              const rank = parseInt(row[rankColumn]) || (index + 1);
+              const teamName = row[nameColumn] || '';
+              
+              return {
+                id: `team_${index + 1}`,
+                name: teamName,
+                csrRank: rank,
+                conference: 'N/A', // We don't have conference info in this CSV
+                status: {
+                  isAQ: false,
+                  isLocked: false,
+                  isQualified: false,
+                  qualificationMethod: null,
+                  qualificationRound: null
+                }
+              };
+            });
+          
+          // Validate data
+          if (teams.some(team => !team.name)) {
+            setUploadError('Invalid CSV format: Some teams are missing names');
             setIsUploading(false);
             return;
+          }
+          
+          // First reset the event state
+          resetEventState();
+          
+          // Set the selection type in context
+          setSelectionType(selectedType);
+          
+          // Set the teams in the event state
+          setEventTeams(teams);
+          
+          // Get the current users from Firebase first
+          let allUsers = [];
+          try {
+            const usersSnapshot = await get(ref(database, 'users'));
+            if (usersSnapshot.exists()) {
+              allUsers = Object.values(usersSnapshot.val());
             }
-            
-            try {
-            // Skip the first two rows (headers) and extract team data
-            const rowData = results.data.slice(2);
-            
-            // Determine which columns to use based on selection type
-            let rankColumn = 0; // Column A for Open Rankings
-            let nameColumn = 1; // Column B for Open Team Name
-            
-            if (selectedType === 'women') {
-                // For Women's selection, use different columns
-                rankColumn = 5; // Column F for Women's Rankings
-                nameColumn = 6; // Column G for Women's Team Name
+          } catch (error) {
+            console.error("Error getting users from Firebase:", error);
+          }
+          
+          // If no users in Firebase, try localStorage
+          if (allUsers.length === 0) {
+            allUsers = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
+          }
+          
+          // Update active selectors for this process
+          const updatedUsers = allUsers.map(user => {
+            if (user.role === 'selector') {
+              // Mark selectors as active/inactive based on selection
+              return {
+                ...user,
+                isActive: selectedSelectors.includes(user.id)
+              };
             }
-            
-            // Transform data to match our team format
-            const teams = rowData
-                .filter(row => row[rankColumn] && row[nameColumn]) // Ensure rank and team name exist
-                .map((row, index) => {
-                // Extract rank and team name from the appropriate columns
-                const rank = parseInt(row[rankColumn]) || (index + 1);
-                const teamName = row[nameColumn] || '';
-                
-                return {
-                    id: `team_${index + 1}`,
-                    name: teamName,
-                    csrRank: rank,
-                    conference: 'N/A', // We don't have conference info in this CSV
-                    status: {
-                    isAQ: false,
-                    isLocked: false,
-                    isQualified: false,
-                    qualificationMethod: null,
-                    qualificationRound: null
-                    }
-                };
-                });
-            
-            // Validate data
-            if (teams.some(team => !team.name)) {
-                setUploadError('Invalid CSV format: Some teams are missing names');
-                setIsUploading(false);
-                return;
+            return user;
+          });
+          
+          // Save updated users to BOTH Firebase and localStorage
+          // First to localStorage
+          localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
+          
+          // Then to Firebase - update each user
+          for (const user of updatedUsers) {
+            if (user.id) {
+              const userRef = ref(database, `users/${user.id}`);
+              await set(userRef, user);
             }
-            
-            // First reset the event state
-            resetEventState();
-            
-            // Set the selection type in context
-            setSelectionType(selectedType);
-            
-            // Set the teams in the event state
-            setEventTeams(teams);
-            
-            // Update active selectors for this process
-            const users = JSON.parse(localStorage.getItem('sailing_nationals_users') || '[]');
-            
-            const updatedUsers = users.map(user => {
-                if (user.role === 'selector') {
-                // Mark selectors as active/inactive based on selection
-                return {
-                    ...user,
-                    isActive: selectedSelectors.includes(user.id)
-                };
-                }
-                return user;
-            });
-            
-            // Save updated users to localStorage
-            localStorage.setItem('sailing_nationals_users', JSON.stringify(updatedUsers));
-            
-            // Hide confirmation dialog
-            setShowConfirmation(false);
-            
-            // Advance to next phase (AQ selection)
-            advancePhase();
-            
-            // Show success message
-            alert(`${selectedType.charAt(0).toUpperCase() + selectedType.slice(1)} selection process has been initiated with ${teams.length} teams!`);
-            
-            setIsUploading(false);
-            } catch (error) {
-            setUploadError(`Error processing data: ${error.message}`);
-            setIsUploading(false);
-            }
-        },
-        error: (error) => {
-            setUploadError(`Error reading file: ${error.message}`);
-            setIsUploading(false);
+          }
+          
+          // Hide confirmation dialog
+          setShowConfirmation(false);
+          
+          // Advance to next phase (AQ selection)
+          advancePhase();
+          
+          // Show success message
+          alert(`${selectedType.charAt(0).toUpperCase() + selectedType.slice(1)} selection process has been initiated with ${teams.length} teams!`);
+          
+          setIsUploading(false);
+        } catch (error) {
+          setUploadError(`Error processing data: ${error.message}`);
+          setIsUploading(false);
         }
-        });
-    };
+      },
+      error: (error) => {
+        setUploadError(`Error reading file: ${error.message}`);
+        setIsUploading(false);
+      }
+    });
+  };
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-sm">
