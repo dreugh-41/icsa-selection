@@ -455,9 +455,16 @@ export function EventProvider({ children }) {
           ? prev.pendingQualifiedTeams 
           : [];
       
+      // Filter out any teams that are already in the pending list
+      const teamsToAdd = newQualifiedTeams.filter(newTeam => 
+        !currentPendingTeams.some(existingTeam => existingTeam.id === newTeam.id)
+      );
+      
+      console.log(`${newQualifiedTeams.length} teams provided, ${teamsToAdd.length} unique teams being added`);
+      
       return {
         ...prev,
-        pendingQualifiedTeams: [...currentPendingTeams, ...newQualifiedTeams]
+        pendingQualifiedTeams: [...currentPendingTeams, ...teamsToAdd]
       };
     });
   };
